@@ -1,49 +1,36 @@
+from agents.common import build_message, invoke_text_agent
 from core.state import AgentState
-from core.llm import get_llm
 from prompts.agent_prompts import TIKTOK_WRITER_PROMPT
-from langgraph.prebuilt import create_react_agent
 from tools.analytics import get_seo_keywords
-from tools.platform_tools import get_trending_sounds, get_platform_specs
-from langchain_core.messages import AIMessage
-
-
-def create_tiktok_writer_agent():
-    """
-    TikTok Writer agent.
-    Specializes in creating viral TikTok content: video scripts with timestamps,
-    hook optimization, trending sound suggestions, and caption + hashtag combos.
-    """
-    llm = get_llm(temperature=0.8)  # Higher temp for creative, trendy Gen-Z tone
-    
-    tools = [get_seo_keywords, get_trending_sounds, get_platform_specs]
-    
-    tiktok_agent = create_react_agent(
-        llm, 
-        tools=tools,  
-        prompt=TIKTOK_WRITER_PROMPT
-    )
-    return tiktok_agent
+from tools.platform_tools import get_platform_specs, get_trending_sounds
 
 
 def tiktok_writer_node(state: AgentState):
-    """
-    The 'TikTokWriter' node within LangGraph.
-    Creates TikTok-optimized viral video scripts based on the Researcher's data.
-    """
-    print("🎵 [Agent Working]: TikTok Writer is scripting viral hooks and trend-aware content...")
-    agent = create_tiktok_writer_agent()
-    result = agent.invoke({"messages": state["messages"]})
-    
-    last_msg = result["messages"][-1].content
-    if isinstance(last_msg, list):
-        last_msg = "\n".join([item.get("text", "") for item in last_msg if isinstance(item, dict) and "text" in item])
-        
-    # Track this platform as completed
-    completed = list(state.get("completed_platforms", []))
-    if "TikTok" not in completed:
-        completed.append("TikTok")
-    
+    print("[TikTokWriter]: building TikTok content package...")
+    assets = state.get("assets", {})
+    strategy = assets.get("strategy", {})
+    research = assets.get("research", "")
+    trend_report = assets.get("trend_report", "")
+    specs = get_platform_specs.invoke({"platform": "tiktok"})
+    sounds = get_trending_sounds.invoke({"topic": state["user_input"]})
+    seo_keywords = get_seo_keywords.invoke({"topic": state["user_input"]})
+
+    content = invoke_text_agent(
+        TIKTOK_WRITER_PROMPT,
+        (
+            f"Topic: {state['user_input']}\n\n"
+            f"Strategy:\n{strategy}\n\n"
+            f"Research:\n{research}\n\n"
+            f"Trend signals:\n{trend_report}\n\n"
+            f"TikTok specs:\n{specs}\n\n"
+            f"Trending sounds:\n{sounds}\n\n"
+            f"Keyword cues:\n{seo_keywords}"
+        ),
+        temperature=0.75,
+    )
+
     return {
-        "messages": [AIMessage(content=last_msg, name="TikTokWriter")],
-        "completed_platforms": completed
+        "messages": build_message("TikTokWriter", content),
+        "assets": {"social": {"TikTok": content}},
+        "completed_steps": ["TikTokWriter"],
     }

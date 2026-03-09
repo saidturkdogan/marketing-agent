@@ -6,6 +6,9 @@ load_dotenv()
 
 # Extract important API keys
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemini-2.0-flash")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # Issue a warning if a key is missing
 if not GOOGLE_API_KEY:

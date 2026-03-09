@@ -1,176 +1,147 @@
-import os
-from dotenv import load_dotenv
+from core.pipeline import build_initial_state, persist_campaign_outputs, stream_campaign
 
-# required modules for LangGraph flow design
-from langgraph.graph import StateGraph, START, END
-from langchain_core.messages import HumanMessage
+DEFAULT_PLATFORMS = ["Instagram", "LinkedIn", "TikTok", "Twitter"]
+DEFAULT_OUTPUTS = ["blog", "social", "video", "images"]
 
-# Project components
-from core.state import AgentState
-from core.config import GOOGLE_API_KEY
-from agents.researcher import researcher_node
-from agents.instagram_writer import instagram_writer_node
-from agents.linkedin_writer import linkedin_writer_node
-from agents.tiktok_writer import tiktok_writer_node
-from agents.twitter_writer import twitter_writer_node
-from agents.reviewer import reviewer_node
-from agents.supervisor import supervisor_node
 
-def build_marketing_team_graph():
-    """
-    Builds the Communication Flow (Graph) of the Multi-Agent System.
-    
-    Flow:
-    User → Supervisor → Researcher → Supervisor → [Platform Writers] → Supervisor → Reviewer → FINISH
-    
-    Platform Writers:
-    - InstagramWriter: Creates Instagram-specific content
-    - LinkedInWriter: Creates LinkedIn-specific content
-    - TikTokWriter: Creates TikTok-specific content
-    - TwitterWriter: Creates Twitter/X-specific content
-    """
-    # 1. Place the State object at the core
-    builder = StateGraph(AgentState)
-    
-    # 2. Add all agents as Nodes
-    builder.add_node("Supervisor", supervisor_node)
-    builder.add_node("Researcher", researcher_node)
-    builder.add_node("InstagramWriter", instagram_writer_node)
-    builder.add_node("LinkedInWriter", linkedin_writer_node)
-    builder.add_node("TikTokWriter", tiktok_writer_node)
-    builder.add_node("TwitterWriter", twitter_writer_node)
-    builder.add_node("Reviewer", reviewer_node)
-    
-    # 3. Define the Paths (Edges)
-    # The Supervisor must always respond to the first message from the user (START)
-    builder.add_edge(START, "Supervisor")
-    
-    # All agents return to SUPERVISOR for evaluation (Feedback / Loop)
-    builder.add_edge("Researcher", "Supervisor")
-    builder.add_edge("InstagramWriter", "Supervisor")
-    builder.add_edge("LinkedInWriter", "Supervisor")
-    builder.add_edge("TikTokWriter", "Supervisor")
-    builder.add_edge("TwitterWriter", "Supervisor")
-    builder.add_edge("Reviewer", "Supervisor")
-    
-    # Conditional Edges: Branch paths based on Supervisor's decision
-    builder.add_conditional_edges(
-        "Supervisor",
-        lambda state: state["next"],
-        {
-            "Researcher": "Researcher",
-            "InstagramWriter": "InstagramWriter",
-            "LinkedInWriter": "LinkedInWriter",
-            "TikTokWriter": "TikTokWriter",
-            "TwitterWriter": "TwitterWriter",
-            "Reviewer": "Reviewer",
-            "FINISH": END
-        }
+def parse_platform_input(platform_input: str) -> list[str]:
+    platform_map = {
+        "instagram": "Instagram",
+        "ig": "Instagram",
+        "insta": "Instagram",
+        "linkedin": "LinkedIn",
+        "li": "LinkedIn",
+        "tiktok": "TikTok",
+        "tt": "TikTok",
+        "twitter": "Twitter",
+        "x": "Twitter",
+        "tweet": "Twitter",
+    }
+    if platform_input in ["all", "", "hepsi", "tümü"]:
+        return DEFAULT_PLATFORMS
+
+    platforms = []
+    for value in platform_input.split(","):
+        normalized = platform_map.get(value.strip().lower())
+        if normalized and normalized not in platforms:
+            platforms.append(normalized)
+    return platforms or DEFAULT_PLATFORMS
+
+
+def parse_output_input(output_input: str) -> list[str]:
+    output_map = {
+        "blog": "blog",
+        "social": "social",
+        "video": "video",
+        "script": "video",
+        "images": "images",
+        "image": "images",
+        "all": "all",
+    }
+    normalized_values = [output_map.get(item.strip().lower()) for item in output_input.split(",")]
+    if not output_input.strip() or "all" in normalized_values:
+        return DEFAULT_OUTPUTS
+    outputs = [value for value in normalized_values if value and value != "all"]
+    return list(dict.fromkeys(outputs)) or DEFAULT_OUTPUTS
+
+
+def print_node_output(node_output: dict) -> None:
+    if "next" in node_output and "messages" not in node_output:
+        print(f"-> Decision: Task assigned to {node_output['next']} agent.")
+        return
+
+    if "messages" not in node_output:
+        return
+
+    last_msg = node_output["messages"][-1].content
+    if isinstance(last_msg, list):
+        formatted_msg = "\n".join([
+            item.get("text", "") for item in last_msg
+            if isinstance(item, dict) and "text" in item
+        ])
+    else:
+        formatted_msg = str(last_msg)
+    print(f"{formatted_msg}\n")
+
+
+def merge_node_output(final_state: dict, node_output: dict) -> None:
+    for key, value in node_output.items():
+        if key == "messages":
+            final_state["messages"] = list(final_state.get("messages", [])) + list(value)
+        else:
+            final_state[key] = value
+
+
+def run_cli_campaign(user_input: str, target_platforms: list[str], requested_outputs: list[str]) -> dict:
+    print(
+        f"\nFactory is running for platforms: {', '.join(target_platforms)} "
+        f"and outputs: {', '.join(requested_outputs)}\n"
     )
-    
-    # 4. Compile the graph
-    graph = builder.compile()
-    return graph
+
+    final_state = build_initial_state(user_input, target_platforms, requested_outputs)
+    for event in stream_campaign(user_input, target_platforms, requested_outputs):
+        for node_name, node_output in event.items():
+            print(f"\n{'='*8} [FLOW] {node_name} {'='*8}")
+            merge_node_output(final_state, node_output)
+            print_node_output(node_output)
+    return final_state
+
+
+def prompt_campaign_inputs() -> tuple[str, list[str], list[str]] | None:
+    user_input = input("\nSend Request to Marketing Director:\n> ")
+
+    if user_input.lower() in ["q", "quit", "exit"]:
+        print("Shutting down the Marketing Agency system...")
+        return None
+
+    if not user_input.strip():
+        return ("", [], [])
+
+    print("\nWhich platforms? (comma-separated, or 'all' for all platforms)")
+    print("   Options: instagram, linkedin, tiktok, twitter")
+    platform_input = input("> ").strip().lower()
+
+    print("\nWhich outputs? (comma-separated, or 'all')")
+    print("   Options: blog, social, video, images")
+    output_input = input("> ").strip().lower()
+
+    return (
+        user_input,
+        parse_platform_input(platform_input),
+        parse_output_input(output_input),
+    )
 
 def main():
     print("=" * 65)
-    print("🤖 AI Marketing Agency — Multi-Platform Content System")
+    print("AI Content Factory - Multi-Agent Marketing System")
     print("=" * 65)
     print()
-    print("📸 Instagram  |  💼 LinkedIn  |  🎵 TikTok  |  🐦 Twitter/X")
+    print("Planner | Research | Strategy | Blog | Social | Video | Images")
     print()
     print("Note: Make sure you have your GOOGLE_API_KEY in the .env file.")
     print("Type 'q' or 'quit' to exit.")
     print("-" * 65)
     
-    # Load the graph into memory
-    app = build_marketing_team_graph()
-    
     while True:
-        user_input = input("\n📝 Send Request to Marketing Director:\n> ")
-        
-        if user_input.lower() in ["q", "quit", "exit"]:
-            print("Shutting down the Marketing Agency system...")
+        prompted = prompt_campaign_inputs()
+        if prompted is None:
             break
-            
-        if not user_input.strip():
+        if prompted == ("", [], []):
             continue
-        
-        # Ask which platforms to target
-        print("\n🎯 Which platforms? (comma-separated, or 'all' for all platforms)")
-        print("   Options: instagram, linkedin, tiktok, twitter")
-        platform_input = input("> ").strip().lower()
-        
-        if platform_input in ["all", "", "hepsi", "tümü"]:
-            target_platforms = ["Instagram", "LinkedIn", "TikTok", "Twitter"]
+        user_input, target_platforms, requested_outputs = prompted
+        final_state = run_cli_campaign(user_input, target_platforms, requested_outputs)
+
+        persistence = persist_campaign_outputs(final_state)
+        print("\nCampaign assets created and reviewed.")
+        print(f"All content saved to: {persistence['output_file']}")
+        if persistence["database"]["saved"]:
+            print(
+                "Database persistence completed: "
+                f"campaign #{persistence['database']['campaign_row_id']} "
+                f"with {persistence['database']['asset_rows']} asset rows."
+            )
         else:
-            platform_map = {
-                "instagram": "Instagram", "ig": "Instagram", "insta": "Instagram",
-                "linkedin": "LinkedIn", "li": "LinkedIn",
-                "tiktok": "TikTok", "tt": "TikTok",
-                "twitter": "Twitter", "x": "Twitter", "tweet": "Twitter",
-            }
-            target_platforms = []
-            for p in platform_input.split(","):
-                p = p.strip()
-                if p in platform_map:
-                    target_platforms.append(platform_map[p])
-            
-            if not target_platforms:
-                print("⚠️  No valid platforms selected. Defaulting to all platforms.")
-                target_platforms = ["Instagram", "LinkedIn", "TikTok", "Twitter"]
-        
-        print(f"\n⚙️  Team starts working on: {', '.join(target_platforms)}...\n")
-        
-        # Initialize state with platform targeting
-        initial_state = {
-            "messages": [HumanMessage(content=user_input)],
-            "next": "",
-            "target_platforms": target_platforms,
-            "completed_platforms": []
-        }
-        
-        final_output = ""
-        
-        # Stream execution with recursion limit
-        # More agents = need higher recursion limit
-        for event in app.stream(initial_state, {"recursion_limit": 40}):
-            for node_name, node_output in event.items():
-                print(f"\n{'='*8} [FLOW] {node_name} {'='*8}")
-                
-                if "next" in node_output and "messages" not in node_output:
-                    print(f"-> Decision: Task assigned to {node_output['next']} agent.")
-                    
-                elif "messages" in node_output:
-                    last_msg = node_output["messages"][-1].content
-                    
-                    if isinstance(last_msg, list):
-                        formatted_msg = "\n".join([
-                            item.get("text", "") for item in last_msg 
-                            if isinstance(item, dict) and "text" in item
-                        ])
-                        print(f"{formatted_msg}\n")
-                        final_output += f"\n\n{'='*40}\n## {node_name}\n{'='*40}\n\n{formatted_msg}"
-                    else:
-                        print(f"{last_msg}\n")
-                        final_output += f"\n\n{'='*40}\n## {node_name}\n{'='*40}\n\n{last_msg}"
-                    
-        print("\n✅ All platform content has been created and reviewed!")
-        
-        # Save the final structured output to a Markdown file
-        output_dir = "outputs"
-        os.makedirs(output_dir, exist_ok=True)
-        safe_filename = "".join(c if c.isalnum() else "_" for c in user_input[:30]).strip("_")
-        platforms_tag = "_".join([p.lower() for p in target_platforms])
-        file_path = os.path.join(output_dir, f"{safe_filename}_{platforms_tag}_result.md")
-        
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(f"# 🎯 Marketing Campaign: {user_input}\n\n")
-            f.write(f"**Target Platforms:** {', '.join(target_platforms)}\n\n")
-            f.write("---\n")
-            f.write(final_output)
-            
-        print(f"📁 All content saved to: {file_path}")
+            print(f"Database persistence skipped: {persistence['database']['reason']}")
 
 if __name__ == "__main__":
     main()

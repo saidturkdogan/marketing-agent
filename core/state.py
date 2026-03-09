@@ -1,23 +1,46 @@
-from typing import Annotated, Sequence, TypedDict
+from typing import Annotated, Any, Sequence, TypedDict
 import operator
 from langchain_core.messages import BaseMessage
 
+
+def merge_assets(a: dict, b: dict) -> dict:
+    """Merge two assets dicts; nested 'social' dict is merged, not overwritten."""
+    result = dict(a)
+    for key, value in b.items():
+        if key == "social" and isinstance(value, dict):
+            merged_social = dict(result.get("social", {}))
+            merged_social.update(value)
+            result["social"] = merged_social
+        else:
+            result[key] = value
+    return result
+
+
 class AgentState(TypedDict):
     """
-    The state of the system. Used to pass data between agents in the LangGraph flow.
-    Every time an agent runs, a new message is added to the 'messages' list.
-    The 'next' field determines which agent the Supervisor hands off to next.
-    target_platforms tracks which platforms the user wants content for.
-    completed_platforms tracks which platform writers have finished their work.
+    Shared state for the content factory graph.
+
+    - Planner builds `execution_queue` and `parallel_groups`.
+    - Sequential steps run through Supervisor.
+    - Parallel steps (content writers) fan-out via Send API and fan-in here.
+    - Each agent writes structured output into `assets`.
     """
-    # Message history - operator.add appends new messages to the list instead of overwriting
     messages: Annotated[Sequence[BaseMessage], operator.add]
-    
-    # The name of the next agent to be called
+
+    user_input: str
+    campaign_id: str
     next: str
-    
-    # Which platforms the user wants content for (e.g. ["Instagram", "LinkedIn", "TikTok", "Twitter"])
     target_platforms: list[str]
-    
-    # Which platform writers have already completed their work
-    completed_platforms: list[str]
+    requested_outputs: list[str]
+
+    # Deterministic routing
+    execution_queue: list[str]
+    parallel_groups: list[list[str]]
+
+    completed_steps: Annotated[list[str], operator.add]
+
+    plan: dict[str, Any]
+    assets: Annotated[dict[str, Any], merge_assets]
+
+    # Analytics feedback injected from memory at campaign start
+    analytics_context: dict[str, Any]
