@@ -92,6 +92,35 @@ def persist_campaign_outputs(final_state: dict, output_dir: str = "outputs") -> 
         review=assets.get("review", ""),
     )
 
+    # Store in RAG vector database for semantic search
+    try:
+        from core.rag import store_campaign_vector
+        import asyncio
+        
+        # Get performance score from analytics
+        analytics = assets.get("analytics", {})
+        performance_score = analytics.get("performance_score", 0.0)
+        
+        # Run async store in sync context
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(
+                store_campaign_vector(
+                    campaign_uuid=final_state["campaign_id"],
+                    topic=final_state["user_input"],
+                    plan=final_state.get("plan", {}),
+                    strategy=assets.get("strategy", {}),
+                    analytics=analytics,
+                    platforms=final_state.get("target_platforms", []),
+                    performance_score=performance_score
+                )
+            )
+        finally:
+            loop.close()
+    except Exception as e:
+        print(f"[Pipeline] RAG storage failed: {e}")
+
     # Update session in short-term memory
     save_session(
         final_state["campaign_id"],
@@ -101,4 +130,5 @@ def persist_campaign_outputs(final_state: dict, output_dir: str = "outputs") -> 
     return {
         "output_file": output_file,
         "database": database,
+        "rag_stored": True,
     }

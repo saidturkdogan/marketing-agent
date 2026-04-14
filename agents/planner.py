@@ -68,9 +68,30 @@ def planner_node(state: AgentState):
     requested_platforms = state.get("target_platforms") or list(PLATFORM_TO_STEP.keys())
     analytics_ctx = state.get("analytics_context") or {}
 
+    # Build analytics hint
     analytics_hint = ""
     if analytics_ctx:
         analytics_hint = f"\n\nPast performance signals:\n{to_pretty_json(analytics_ctx)}"
+    
+    # Add RAG context if available (semantically similar campaigns)
+    rag_context = ""
+    if analytics_ctx.get("recent_campaigns"):
+        recent = analytics_ctx["recent_campaigns"]
+        rag_context = "\n\n📚 SIMILAR PAST CAMPAIGNS (from RAG knowledge base):\n"
+        for i, camp in enumerate(recent, 1):
+            relevance = camp.get("relevance", 0)
+            score = camp.get("performance_score", 0)
+            rag_context += f"\n{i}. Topic: {camp.get('topic', 'N/A')}"
+            rag_context += f"\n   Relevance: {relevance:.1%}"
+            rag_context += f"\n   Performance: {score:.1%}"
+            if camp.get("preview"):
+                rag_context += f"\n   Preview: {camp['preview'][:150]}"
+            rag_context += "\n"
+        
+        # Add RAG-specific instruction
+        if analytics_ctx.get("rag_enabled"):
+            rag_context += "\n💡 These campaigns were found using semantic similarity (RAG)."
+            rag_context += "\nLeverage their successful patterns and avoid their mistakes."
 
     llm = get_llm(temperature=0.2).with_structured_output(CampaignPlan)
     plan = llm.invoke(
@@ -84,6 +105,7 @@ def planner_node(state: AgentState):
                     f"Requested platforms: {requested_platforms}\n"
                     "Respect the requested platforms unless there is a strong reason to narrow them."
                     f"{analytics_hint}"
+                    f"{rag_context}"
                 ),
             ),
         ]

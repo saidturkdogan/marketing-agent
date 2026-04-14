@@ -1,17 +1,17 @@
 """
-Two-tier memory for the content factory.
+Two-tier memory for the content factory with RAG enhancement.
 
 Short-term  — Redis (TTL = 24 h)
   Key: memory:session:<campaign_id>
   Value: JSON snapshot of latest state fields
   Use: carry context across retries / streaming steps
 
-Long-term   — PostgreSQL (campaigns table)
-  Query: fetch N most recent campaigns filtered by topic similarity
+Long-term   — PostgreSQL (campaigns table) + ChromaDB (vector search)
+  Query: Fetch semantically similar past campaigns using RAG
   Use: inject relevant past learnings at campaign start
 
-ChromaDB was removed — simple recency-based SQL retrieval is sufficient
-until the campaign library grows large enough to need semantic search.
+RAG Upgrade: ChromaDB provides semantic similarity search.
+Production upgrade path: pgvector for PostgreSQL-based vector search.
 """
 from __future__ import annotations
 
@@ -96,10 +96,41 @@ def store_campaign_knowledge(
 
 def query_similar_campaigns(topic: str, n_results: int = 3) -> list[dict[str, Any]]:
     """
-    Fetch the N most recent completed campaigns from PostgreSQL.
-    Simple recency-based retrieval — sufficient until the library is large.
-    Production upgrade path: add pgvector for semantic similarity.
+    Fetch semantically similar past campaigns using RAG (ChromaDB).
+    Falls back to recency-based SQL if RAG is not available.
     """
+    # Try RAG-based search first
+    try:
+        from core.rag import search_similar_campaigns
+        import asyncio
+        
+        # Run async function in sync context
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            rag_results = loop.run_until_complete(
+                search_similar_campaigns(topic, limit=n_results)
+            )
+        finally:
+            loop.close()
+        
+        if rag_results:
+            return [
+                {
+                    "campaign_uuid": r.get("campaign_uuid", ""),
+                    "topic": r.get("topic", ""),
+                    "performance_score": r.get("performance_score", 0.0),
+                    "relevance": r.get("relevance", 0.0),
+                    "content_preview": r.get("content_preview", ""),
+                }
+                for r in rag_results
+            ]
+    except Exception as e:
+        # Fallback to SQL if RAG fails
+        print(f"[Memory] RAG search failed, falling back to SQL: {e}")
+        pass
+    
+    # Fallback: recency-based retrieval
     try:
         from sqlalchemy import text
         from core.db import get_engine
@@ -133,7 +164,7 @@ def query_similar_campaigns(topic: str, n_results: int = 3) -> list[dict[str, An
 def build_analytics_context(topic: str) -> dict[str, Any]:
     """
     Build an analytics context dict to inject into AgentState at campaign start.
-    Fetches recent past campaigns and surfaces their performance signals.
+    Uses RAG to fetch semantically similar past campaigns.
     """
     similar = query_similar_campaigns(topic, n_results=3)
     if not similar:
@@ -142,12 +173,15 @@ def build_analytics_context(topic: str) -> dict[str, Any]:
     top = [
         {
             "topic": c.get("topic", ""),
-            "platforms": (c.get("plan") or {}).get("target_platforms", []),
             "performance_score": c.get("performance_score", 0.0),
+            "relevance": c.get("relevance", 0.0),  # RAG relevance score
+            "preview": c.get("content_preview", "")[:100],  # RAG content preview
         }
         for c in similar
     ]
+    
     return {
         "recent_campaigns": top,
+        "rag_enabled": any("relevance" in c for c in similar),  # Flag if RAG is active
         "note": "Use these signals to inform content angles and platform priorities.",
     }

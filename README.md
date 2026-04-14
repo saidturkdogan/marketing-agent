@@ -30,6 +30,15 @@ One topic  →  Research + Trends  →  Strategy  →  Content (parallel)  →  
 
 The system is built on **LangGraph** with a deterministic queue-based orchestrator. Every agent writes structured output into a shared state that is persisted to **PostgreSQL** at the end of each campaign.
 
+**✨ NEW: Auto-Publish to Social Media!**  
+Your marketing agent can now automatically publish content to:
+- ✅ **LinkedIn** - Professional posts (fully implemented, production-ready)
+- 🚧 **Twitter/X** - Tweets and threads (coming soon)
+- 🚧 **WordPress** - Blog posts (coming soon)
+- 🚧 **Instagram** - Image posts (coming soon)
+
+See `docs/LINKEDIN_QUICKSTART.md` to enable LinkedIn publishing in 15 minutes!
+
 ---
 
 ## Architecture

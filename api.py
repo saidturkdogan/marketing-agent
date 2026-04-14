@@ -1,10 +1,19 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from pathlib import Path
 
 from core.pipeline import persist_campaign_outputs, run_campaign
 from core.queue import enqueue_campaign, get_job_status
+from core.linkedin_token_manager import check_linkedin_token
 
 app = FastAPI(title="AI Content Factory API", version="0.2.0")
+
+# Mount static files directory
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
 class CampaignRequest(BaseModel):
@@ -16,7 +25,23 @@ class CampaignRequest(BaseModel):
 
 @app.get("/health")
 def healthcheck():
-    return {"status": "ok"}
+    linkedin_valid, linkedin_msg = check_linkedin_token()
+    return {
+        "status": "ok",
+        "linkedin": {
+            "configured": linkedin_valid,
+            "message": linkedin_msg
+        }
+    }
+
+
+@app.get("/")
+def serve_frontend():
+    """Serve the web UI"""
+    index_path = static_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    return {"error": "Web UI not found. Check static/ directory."}
 
 
 @app.post("/run-campaign")
@@ -51,3 +76,21 @@ def get_job(job_id: str):
     if result.get("status") == "not_found":
         raise HTTPException(status_code=404, detail="Job not found.")
     return result
+
+
+@app.get("/api/linkedin-status")
+def linkedin_status_endpoint():
+    """Check LinkedIn token status"""
+    is_valid, message = check_linkedin_token()
+    return {
+        "configured": is_valid,
+        "message": message
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    print("\n🚀 Starting Marketing Agent Web UI...")
+    print("📱 Access at: http://localhost:8080")
+    print("📚 API Docs: http://localhost:8080/docs\n")
+    uvicorn.run("api:app", host="0.0.0.0", port=8080, reload=False)
