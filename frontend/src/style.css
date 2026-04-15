@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply m-0 bg-slate-950 font-['Inter',-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] text-slate-100;
+  }
+}
+
+@layer components {
+  .app-container {@apply flex min-h-screen;}
+  .sidebar {@apply fixed left-0 top-0 flex h-screen w-64 flex-col border-r border-slate-700 bg-slate-800;}
+  .logo {@apply flex items-center gap-3 border-b border-slate-700 p-6 text-xl font-bold;}
+  .logo i {@apply text-2xl text-indigo-500;}
+  .sidebar-nav {@apply flex-1 py-4;}
+  .nav-item {@apply flex cursor-pointer items-center gap-3 px-6 py-3 text-slate-300 no-underline transition hover:bg-slate-700 hover:text-white;}
+  .nav-item.active {@apply bg-indigo-600 text-white;}
+  .sidebar-footer {@apply border-t border-slate-700 p-4;}
+  .status-indicator {@apply flex items-center gap-2 text-sm text-slate-300;}
+  .status-dot {@apply h-2 w-2 rounded-full bg-green-500;}
+  .main-content {@apply ml-64 w-[calc(100%-16rem)] p-8;}
+  .view {@apply hidden;}
+  .view.active {@apply block;}
+  .view-header {@apply mb-8;}
+  .view-header h1 {@apply mb-2 text-3xl font-bold;}
+  .view-header p {@apply text-slate-300;}
+  .stats-grid {@apply mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4;}
+  .stat-card {@apply flex items-center gap-4 rounded-lg border border-slate-700 bg-slate-800 p-5;}
+  .stat-icon {@apply flex h-12 w-12 items-center justify-center rounded-lg text-xl text-white;}
+  .stat-icon-primary {@apply bg-indigo-600;}
+  .stat-icon-pink {@apply bg-pink-500;}
+  .stat-icon-blue {@apply bg-blue-500;}
+  .stat-icon-green {@apply bg-green-500;}
+  .stat-label {@apply text-sm text-slate-300;}
+  .stat-value {@apply text-2xl font-bold;}
+  .recent-campaigns h2 {@apply mb-5 text-2xl;}
+  .campaign-list {@apply flex flex-col gap-4;}
+  .campaign-item {@apply flex cursor-pointer items-center justify-between rounded-lg border border-slate-700 bg-slate-800 p-5 transition hover:bg-slate-700;}
+  .campaign-title {@apply mb-2 text-lg font-semibold;}
+  .campaign-meta {@apply flex flex-wrap gap-4 text-sm text-slate-300;}
+  .campaign-status {@apply rounded-full px-3 py-1 text-xs font-semibold uppercase;}
+  .campaign-status.completed {@apply bg-green-800 text-white;}
+  .campaign-status.running {@apply bg-blue-800 text-white;}
+  .campaign-status.failed {@apply bg-red-800 text-white;}
+  .campaign-score {@apply text-2xl font-bold text-indigo-400;}
+  .empty-state {@apply rounded-lg border border-dashed border-slate-700 p-10 text-center text-slate-300;}
+  .empty-state i {@apply mb-4 text-5xl opacity-60;}
+  .empty-state p {@apply mb-4 text-lg;}
+  .campaign-form,.progress-container,.results-summary,.results-tabs,.settings-card {@apply rounded-lg border border-slate-700 bg-slate-800;}
+  .campaign-form,.progress-container,.results-summary {@apply p-8;}
+  .form-grid {@apply grid gap-8;}
+  .form-section h3 {@apply mb-5 flex items-center gap-2 text-xl;}
+  .form-group {@apply mb-5;}
+  .form-group label {@apply mb-2 block font-medium;}
+  .form-group textarea,.form-group select {@apply w-full rounded-lg border border-slate-700 bg-slate-700 p-3 text-slate-100;}
+  .form-group small {@apply mt-1 block text-sm text-slate-400;}
+  .platform-grid,.content-types {@apply grid gap-3 md:grid-cols-2;}
+  .platform-checkbox input,.type-checkbox input,.toggle-switch input {@apply hidden;}
+  .platform-card,.type-card {@apply rounded-lg border-2 border-slate-700 bg-slate-700 p-4 transition;}
+  .platform-checkbox input:checked + .platform-card,.type-checkbox input:checked + .type-card {@apply border-indigo-500 bg-indigo-500/10;}
+  .platform-status {@apply text-sm text-green-400;}
+  .platform-status.disabled {@apply text-slate-400;}
+  .toggle-switch {@apply mb-4 flex cursor-pointer items-center gap-4 rounded-lg bg-slate-700 p-4;}
+  .toggle-slider {@apply relative h-6 w-12 rounded-full bg-slate-600;}
+  .toggle-slider::after {@apply absolute left-1 top-1 h-4 w-4 rounded-full bg-white content-[''];}
+  .toggle-switch input:checked + .toggle-slider {@apply bg-indigo-600;}
+  .toggle-switch input:checked + .toggle-slider::after {transform: translateX(24px);}
+  .info-box {@apply flex items-center gap-2 rounded-md border-l-4 border-blue-500 bg-blue-900/40 p-3 text-sm;}
+  .form-actions,.results-actions {@apply mt-6 flex gap-3;}
+  .form-actions {@apply justify-end border-t border-slate-700 pt-6;}
+  .results-actions {@apply justify-center;}
+  .btn {@apply inline-flex items-center gap-2 rounded-lg px-4 py-2 font-semibold;}
+  .btn-primary {@apply bg-indigo-600 text-white hover:bg-indigo-700;}
+  .btn-secondary {@apply bg-slate-700 text-white hover:bg-slate-600;}
+  .btn-small {@apply px-3 py-1.5 text-sm;}
+  .progress-steps {@apply mb-6 flex flex-col gap-3;}
+  .progress-step {@apply flex items-center gap-4 rounded-md border-l-4 border-transparent bg-slate-700 p-4;}
+  .progress-step.active {@apply border-indigo-500 bg-indigo-500/10;}
+  .progress-step.completed {@apply border-green-500 bg-green-500/10;}
+  .progress-step.error {@apply border-red-500 bg-red-500/10;}
+  .step-icon {@apply flex h-10 w-10 items-center justify-center rounded-full bg-slate-600;}
+  .progress-log,.content-block {@apply max-h-96 overflow-auto rounded-md bg-slate-900 p-4 font-mono text-sm;}
+  .log-entry {@apply flex items-start gap-2 py-1;}
+  .log-entry.info {@apply text-blue-400;}
+  .log-entry.success {@apply text-green-400;}
+  .log-entry.error {@apply text-red-400;}
+  .result-item {@apply mb-3 flex items-center gap-4 rounded-md bg-slate-700 p-4;}
+  .result-icon {@apply flex h-10 w-10 items-center justify-center rounded-md text-white;}
+  .result-icon-success {@apply bg-green-600;}
+  .result-icon-blue {@apply bg-blue-600;}
+  .result-icon-primary {@apply bg-indigo-600;}
+  .result-link {@apply text-indigo-400 hover:underline;}
+  .tab-buttons {@apply flex border-b border-slate-700;}
+  .tab-btn {@apply flex-1 px-4 py-3 text-slate-300 hover:bg-slate-700;}
+  .tab-btn.active {@apply bg-indigo-500/10 text-indigo-400;}
+  .tab-content {@apply p-6;}
+  .settings-grid {@apply grid gap-5 md:grid-cols-2 xl:grid-cols-3;}
+  .status-badge {@apply inline-block rounded-full px-3 py-1 text-xs font-semibold;}
+  .status-badge.success {@apply bg-green-800 text-white;}
+  .status-badge.warning {@apply bg-amber-700 text-white;}
+  .status-badge.disabled {@apply bg-slate-700 text-slate-300;}
+  .setting-desc {@apply my-3 text-sm text-slate-300;}
+  .loading-overlay {@apply fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80;}
+  .loading-spinner {@apply text-center;}
+}
+
+@media (max-width: 768px) {
+  .sidebar {display: none;}
+  .main-content {margin-left: 0; width: 100%; padding: 1rem;}
+}

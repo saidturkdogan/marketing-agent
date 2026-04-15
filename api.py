@@ -10,10 +10,10 @@ from core.linkedin_token_manager import check_linkedin_token
 
 app = FastAPI(title="AI Content Factory API", version="0.2.0")
 
-# Mount static files directory
-static_dir = Path(__file__).parent / "static"
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+frontend_dist_dir = Path(__file__).parent / "frontend" / "dist"
+frontend_assets_dir = frontend_dist_dir / "assets"
+if frontend_assets_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(frontend_assets_dir)), name="assets")
 
 
 class CampaignRequest(BaseModel):
@@ -37,11 +37,11 @@ def healthcheck():
 
 @app.get("/")
 def serve_frontend():
-    """Serve the web UI"""
-    index_path = static_dir / "index.html"
+    """Serve the web UI built by Vite."""
+    index_path = frontend_dist_dir / "index.html"
     if index_path.exists():
         return FileResponse(str(index_path))
-    return {"error": "Web UI not found. Check static/ directory."}
+    return {"error": "Web UI not found. Run `npm run build --prefix frontend` first."}
 
 
 @app.post("/run-campaign")

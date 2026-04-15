@@ -14,15 +14,17 @@ it is a **one-shot campaign execution machine** driven by a deterministic queue.
 
 ```
 1. User submits topic + platforms + outputs
-2. build_initial_state() creates AgentState with a unique campaign_id
-3. Planner calls the LLM once → produces CampaignPlan + execution_queue
+2. build_initial_state() creates AgentState with a unique campaign_id,
+   default platforms/outputs, analytics_context, and saves a Redis session snapshot
+3. Planner calls the LLM once → produces CampaignPlan + execution_queue + parallel_groups
 4. Supervisor reads the queue top-down:
-     - Sequential step  → route to that agent, wait for completion
-     - PARALLEL token   → fan out all content writers simultaneously (Send API)
+     - Sequential step  → set next agent and return to Supervisor after completion
+     - PARALLEL token   → fan out content writers in the current parallel group via Send
      - Queue empty      → FINISH
-5. Each agent writes ONLY its delta into `assets`
+5. Each agent writes ONLY its delta into `assets` and appends to `completed_steps`
    (merge_assets reducer merges all deltas safely)
-6. persist_campaign_outputs() writes final state to PostgreSQL + file
+6. persist_campaign_outputs() writes JSON output, persists DB records, updates session,
+   stores campaign knowledge, and optionally stores RAG vectors
 ```
 
 ### Why deterministic routing?
@@ -39,19 +41,26 @@ The LLM is only called inside agents that actually produce content.
 
 ```python
 class AgentState(TypedDict):
-    messages           # append-only message history
-    user_input         # original topic string
-    campaign_id        # UUID for this campaign
-    next               # current routing target
-    target_platforms   # ["Instagram", "LinkedIn", ...]
-    requested_outputs  # ["blog", "social", "video", "images"]
-    execution_queue    # ["Researcher", "TrendDetector", "PARALLEL", "Reviewer", ...]
-    parallel_groups    # [["BlogWriter", "InstagramWriter", ...]]
-    completed_steps    # append-only list of finished agent names
-    plan               # CampaignPlan dict from Planner
-    assets             # all generated content (merge_assets reducer)
-    analytics_context  # past campaign signals injected at start
+    messages: Annotated[Sequence[BaseMessage], operator.add]
+    user_input: str
+    campaign_id: str
+    next: str
+    target_platforms: list[str]
+    requested_outputs: list[str]
+    execution_queue: list[str]
+    parallel_groups: list[list[str]]
+    completed_steps: Annotated[list[str], operator.add]
+    plan: dict[str, Any]
+    assets: Annotated[dict[str, Any], merge_assets]
+    analytics_context: dict[str, Any]
 ```
+
+- `messages` stores the append-only LangChain message history.
+- `target_platforms` and `requested_outputs` default to the platform/output lists from `core/pipeline.py`.
+- `execution_queue` is built by the Planner and consumed by the Supervisor.
+- `parallel_groups` groups concurrent writer steps for fan-out.
+- `assets` is merged with `merge_assets()` so parallel social outputs do not overwrite each other.
+- `analytics_context` is injected at campaign start from `core/memory.py`.
 
 ### Asset merge strategy
 
@@ -60,9 +69,16 @@ a custom reducer handles the merge:
 
 ```python
 def merge_assets(a: dict, b: dict) -> dict:
-    # "social" sub-dict is merged key-by-key (Instagram, LinkedIn, etc.)
-    # all other keys are last-writer-wins
+    if key == "social" and isinstance(value, dict):
+        merged_social = dict(result.get("social", {}))
+        merged_social.update(value)
+        result["social"] = merged_social
+    else:
+        result[key] = value
 ```
+
+- `social` is merged key-by-key, preserving platform-specific assets.
+- all other top-level keys follow last-writer-wins semantics.
 
 ---
 
@@ -70,17 +86,17 @@ def merge_assets(a: dict, b: dict) -> dict:
 
 ### Sequential agents
 
-| Agent         | Input from state          | Output to state                    |
-|---------------|---------------------------|-------------------------------------|
-| Planner       | user_input                | plan, execution_queue, parallel_groups |
-| Researcher    | user_input, plan          | assets.research                    |
-| TrendDetector | user_input                | assets.trend_report                |
-| Strategist    | research, trend_report    | assets.strategy                    |
-| Reviewer      | all assets                | assets.review                      |
-| Publisher     | social, blog, strategy    | assets.publish_manifest            |
-| Analytics     | all assets, platforms     | assets.analytics                   |
+| Agent         | Input from state                         | Output to state                                |
+|---------------|------------------------------------------|-------------------------------------------------|
+| Planner       | user_input, requested_outputs, analytics_context | plan, target_platforms, execution_queue, parallel_groups, assets.planner |
+| Researcher    | user_input, plan                         | assets.research                                 |
+| TrendDetector | user_input                               | assets.trend_report                             |
+| Strategist    | assets.research, assets.trend_report, analytics_context | assets.strategy                                 |
+| Reviewer      | all assets                               | assets.review                                   |
+| Publisher     | social, blog, strategy                    | assets.publish_manifest                         |
+| Analytics     | all assets, target_platforms              | assets.analytics                                |
 
-### Parallel agents (all share the same inputs)
+### Parallel agents (all share the same upstream context)
 
 Every parallel agent reads from:
 - `assets.strategy`
@@ -95,6 +111,9 @@ And writes only its own slice:
 - TwitterWriter → `assets.social.Twitter`
 - VideoScriptWriter → `assets.video_script`
 - ImagePromptWriter → `assets.image_prompts`
+
+- Parallel writers are fan-out targets in `core/engine.py`.
+- They return to `Supervisor` after completion, letting the graph continue.
 
 ---
 
@@ -125,7 +144,9 @@ persist_campaign_outputs()
     ├── persist_campaign()               → PostgreSQL
     │     ├── campaigns table (upsert)
     │     └── assets table (delete + re-insert)
-    └── store_campaign_knowledge()       → performance score into campaigns.plan JSONB
+    ├── store_campaign_knowledge()       → performance score into campaigns.plan JSONB
+    ├── optional RAG vector write via core/rag
+    └── save_session()                   → Redis short-term session update
 ```
 
 ### Upsert logic
@@ -159,8 +180,9 @@ Redis KEY "campaign:status:<job_id>"  (TTL 24h)
 GET /job/<job_id>  →  returns status
 ```
 
-Scale workers by running multiple `python worker.py` processes
-or via `docker compose up --scale worker=N`.
+- `core/queue.py` pushes jobs and stores status keys.
+- `worker.py` polls the queue, executes the graph, and marks completion/failure.
+- If Redis is unavailable, the queue layer falls back gracefully to support sync execution.
 
 ---
 
@@ -172,17 +194,22 @@ or via `docker compose up --scale worker=N`.
 - Written at campaign start (`status: started`) and end (`status: completed`)
 - TTL: 24 hours
 - Use case: quick status lookup, retries, streaming checkpoints
+- Stored by `core/memory.py::save_session()`
 
-### Long-term (PostgreSQL)
+### Long-term (PostgreSQL + RAG)
 
-- Uses the existing `campaigns` table — no extra service needed
-- `build_analytics_context(topic)` fetches the 3 most recent campaigns
-- Performance score is stored in `campaigns.plan->>'performance_score'`
-- Injected into `analytics_context` field of AgentState at campaign start
-- Planner and Strategist read this to improve content angles
+- Uses the existing `campaigns` table plus optional ChromaDB vector search.
+- `build_analytics_context(topic)` fetches semantically similar past campaigns,
+  falling back to recency-based SQL if RAG is unavailable.
+- The injected `analytics_context` can include:
+  - `recent_campaigns`
+  - `rag_enabled`
+  - performance and preview signals
+- `persist_campaign_outputs()` also calls `store_campaign_knowledge()` to persist
+  the campaign's `performance_score` into `campaigns.plan`.
+- `core/pipeline.py` optionally stores campaign vectors in `core/rag` if the module is available.
 
-> **Future upgrade:** Add `pgvector` to enable semantic similarity search
-> over past campaigns instead of simple recency ordering.
+> **Future upgrade:** Add `pgvector` for PostgreSQL-based semantic search and tighter RAG integration.
 
 ---
 
@@ -192,8 +219,8 @@ or via `docker compose up --scale worker=N`.
 |---|---|
 | Deterministic Supervisor (no LLM routing) | Removes 10–15 LLM calls per campaign |
 | Single-call agents (no ReAct loops) | Each agent = exactly 1 LLM call |
-| Shared research + trend data | All 7 parallel agents reuse the same upstream context |
-| `gemini-2.0-flash` as default | ~10× cheaper than pro models |
+| Shared research + trend data | All parallel agents reuse the same upstream context |
+| Planner structured output | Enforces valid CampaignPlan and reduces prompt error handling |
 | Batch generation per agent | Each agent produces multiple outputs in one prompt |
 | Response caching (future) | Redis cache for repeated identical topics |
 
