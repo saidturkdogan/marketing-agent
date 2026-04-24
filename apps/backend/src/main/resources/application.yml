@@ -1,0 +1,31 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: marketing-api
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/marketing_agent}
+    username: ${DATABASE_USER:postgres}
+    password: ${DATABASE_PASSWORD:secret}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  llm:
+    google-api-key: ${GOOGLE_API_KEY:}
+    google-model: ${GOOGLE_MODEL:gemini-2.0-flash}
+  linkedin:
+    access-token: ${LINKEDIN_ACCESS_TOKEN:}

@@ -1,35 +1,15 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-venv/
-.venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Environment variables
-.env
-
-# Project specific
-outputs/
+# OS/editor
 .DS_Store
+.idea/
+.vscode/
 
-# Frontend dependencies
-node_modules/
+# Java / Maven
+apps/backend/target/
+*.class
+
+# Frontend
+apps/frontend/node_modules/
+apps/frontend/dist/
+
+# Logs
+*.log
