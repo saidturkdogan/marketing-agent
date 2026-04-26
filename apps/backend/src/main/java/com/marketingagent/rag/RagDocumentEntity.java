@@ -30,9 +30,20 @@ public class RagDocumentEntity {
     @Column(nullable = false, columnDefinition = "text")
     private String content;
 
+    /**
+     * Legacy embedding column (kept for backward compatibility).
+     * New code should use embeddingVec instead.
+     */
     @Convert(converter = StringListJsonConverter.class)
     @Column(name = "embedding", columnDefinition = "text")
     private List<String> embedding;
+
+    /**
+     * Native pgvector column — used for real semantic similarity search.
+     * 4096 dimensions matches qwen3-embedding-8b output.
+     */
+    @Column(name = "embedding_vec", columnDefinition = "vector(4096)")
+    private String embeddingVec;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
@@ -41,6 +52,8 @@ public class RagDocumentEntity {
     void onCreate() {
         this.createdAt = OffsetDateTime.now();
     }
+
+    // --- getters & setters ---
 
     public Long getId() { return id; }
     public String getCampaignId() { return campaignId; }
@@ -51,4 +64,32 @@ public class RagDocumentEntity {
     public void setContent(String content) { this.content = content; }
     public List<String> getEmbedding() { return embedding; }
     public void setEmbedding(List<String> embedding) { this.embedding = embedding; }
+    public OffsetDateTime getCreatedAt() { return createdAt; }
+
+    /**
+     * Returns the raw pgvector string representation, e.g. "[0.1,0.2,...]".
+     */
+    public String getEmbeddingVec() { return embeddingVec; }
+
+    /**
+     * Accepts a pgvector-format string, e.g. "[0.1,0.2,...]".
+     */
+    public void setEmbeddingVec(String embeddingVec) { this.embeddingVec = embeddingVec; }
+
+    /**
+     * Convenience setter: converts a float[] to the pgvector string format.
+     */
+    public void setEmbeddingVecFromArray(float[] vector) {
+        if (vector == null) {
+            this.embeddingVec = null;
+            return;
+        }
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < vector.length; i++) {
+            if (i > 0) sb.append(",");
+            sb.append(vector[i]);
+        }
+        sb.append("]");
+        this.embeddingVec = sb.toString();
+    }
 }

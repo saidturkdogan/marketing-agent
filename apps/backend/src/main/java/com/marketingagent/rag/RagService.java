@@ -2,14 +2,25 @@ package com.marketingagent.rag;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketingagent.domain.CampaignState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * RAG (Retrieval-Augmented Generation) service.
+ *
+ * Uses pgvector for semantic similarity search:
+ *   - storeCampaign() embeds the campaign content and stores the vector in PostgreSQL
+ *   - retrieveContext() embeds the query, then uses pgvector's HNSW index
+ *     for fast cosine distance search to find the most relevant past campaigns
+ */
 @Service
 public class RagService {
+
+    private static final Logger log = LoggerFactory.getLogger(RagService.class);
 
     private final RagDocumentRepository repository;
     private final EmbeddingService embeddingService;
@@ -21,47 +32,86 @@ public class RagService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Stores a completed campaign as a RAG document with a pgvector embedding.
+     */
     public void storeCampaign(CampaignState state) {
         try {
-            RagDocumentEntity doc = new RagDocumentEntity();
-            doc.setCampaignId(state.getCampaignId());
-            doc.setTopic(state.getTopic());
-            doc.setContent(objectMapper.writeValueAsString(Map.of(
+            String content = objectMapper.writeValueAsString(Map.of(
                     "topic", state.getTopic(),
                     "plan", state.getPlan(),
                     "assets", state.getAssets(),
                     "score", state.getPerformanceScore()
-            )));
-            doc.setEmbedding(embeddingService.serialize(embeddingService.embed(doc.getContent())));
+            ));
+
+            float[] vector = embeddingService.embed(content);
+
+            RagDocumentEntity doc = new RagDocumentEntity();
+            doc.setCampaignId(state.getCampaignId());
+            doc.setTopic(state.getTopic());
+            doc.setContent(content);
+            doc.setEmbeddingVecFromArray(vector);
             repository.save(doc);
+
+            log.info("Stored RAG document for campaign {} with {}-dim vector",
+                    state.getCampaignId(), vector.length);
         } catch (Exception ex) {
             throw new IllegalStateException("RAG document storage failed", ex);
         }
     }
 
+    /**
+     * Retrieves the most semantically similar campaign contexts using pgvector
+     * cosine distance search.
+     *
+     * @param query  the search query (will be embedded)
+     * @param limit  max number of results
+     * @return list of JSON-encoded campaign content strings
+     */
     public List<String> retrieveContext(String query, int limit) {
-        List<Double> queryVector = embeddingService.embed(query);
-        return repository.findAll().stream()
-                .filter(doc -> doc.getEmbedding() != null && !doc.getEmbedding().isEmpty())
-                .sorted(Comparator.comparingDouble(doc -> -cosine(queryVector, embeddingService.deserialize(doc.getEmbedding()))))
-                .limit(limit)
+        float[] queryVector = embeddingService.embed(query);
+        String queryVecStr = floatArrayToVectorString(queryVector);
+
+        List<RagDocumentEntity> results = repository.findBySimilarity(queryVecStr, limit);
+
+        log.debug("RAG retrieval for '{}' returned {} documents", query, results.size());
+        return results.stream()
                 .map(RagDocumentEntity::getContent)
                 .toList();
     }
 
-    private double cosine(List<Double> a, List<Double> b) {
-        double dot = 0.0;
-        double normA = 0.0;
-        double normB = 0.0;
-        int size = Math.min(a.size(), b.size());
-        for (int i = 0; i < size; i++) {
-            dot += a.get(i) * b.get(i);
-            normA += a.get(i) * a.get(i);
-            normB += b.get(i) * b.get(i);
+    /**
+     * Retrieves semantically similar contexts with a similarity threshold.
+     * Only returns documents whose cosine distance is below maxDistance.
+     *
+     * @param query       the search query
+     * @param limit       max number of results
+     * @param maxDistance  maximum cosine distance (0.0 = identical, 2.0 = opposite)
+     * @return list of JSON-encoded campaign content strings
+     */
+    public List<String> retrieveContextWithThreshold(String query, int limit, double maxDistance) {
+        float[] queryVector = embeddingService.embed(query);
+        String queryVecStr = floatArrayToVectorString(queryVector);
+
+        List<RagDocumentEntity> results = repository.findBySimilarityWithThreshold(queryVecStr, maxDistance, limit);
+
+        log.debug("RAG retrieval (threshold={}) for '{}' returned {} documents",
+                maxDistance, query, results.size());
+        return results.stream()
+                .map(RagDocumentEntity::getContent)
+                .toList();
+    }
+
+    /**
+     * Converts a float[] to pgvector's string format: "[0.1,0.2,...]"
+     */
+    private String floatArrayToVectorString(float[] vector) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < vector.length; i++) {
+            if (i > 0) sb.append(",");
+            sb.append(vector[i]);
         }
-        if (normA == 0.0 || normB == 0.0) {
-            return 0.0;
-        }
-        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+        sb.append("]");
+        return sb.toString();
     }
 }

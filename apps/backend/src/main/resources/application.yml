@@ -14,6 +14,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
   flyway:
     enabled: true
 
@@ -27,5 +28,9 @@ app:
   llm:
     google-api-key: ${GOOGLE_API_KEY:}
     google-model: ${GOOGLE_MODEL:gemini-2.0-flash}
+  embedding:
+    api-key: ${EMBEDDING_API_KEY:sk-mia_a68837_R-g4EagJ4ruwW9xKO48DlESDtxneIZHliroZ5LvrgBR_SzwU_loUj9eII9_syo6L}
+    model: ${EMBEDDING_MODEL:qwen3-embedding-8b}
+    base-url: ${EMBEDDING_BASE_URL:https://api.openai.com/v1}
   linkedin:
     access-token: ${LINKEDIN_ACCESS_TOKEN:}
