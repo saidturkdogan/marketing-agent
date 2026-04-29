@@ -4,6 +4,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- Add a native vector column (4096 dimensions for qwen3-embedding-8b)
 ALTER TABLE rag_documents ADD COLUMN IF NOT EXISTS embedding_vec vector(4096);
 
--- Create an HNSW index for fast cosine similarity search
-CREATE INDEX IF NOT EXISTS idx_rag_documents_embedding_vec
-    ON rag_documents USING hnsw (embedding_vec vector_cosine_ops);
+-- NOTE:
+-- pgvector HNSW indexes on vector columns are limited to 2000 dimensions.
+-- Since this project uses 4096-dim embeddings, we skip ANN index creation here
+-- to keep migrations compatible and application startup reliable.

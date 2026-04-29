@@ -23,6 +23,7 @@ Backend defaults:
 - Database URL: `jdbc:postgresql://localhost:5432/marketing_agent`
 - User: `postgres`
 - Password: `secret`
+- Meta Graph version: `v25.0` (`META_GRAPH_VERSION`)
 
 ## Run Frontend
 
@@ -30,6 +31,30 @@ Backend defaults:
 cd apps/frontend
 npm install
 npm run dev
+```
+
+## Run With Docker
+
+```bash
+docker compose up --build
+```
+
+Services:
+
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8080`
+- PostgreSQL (`pgvector`): `localhost:5432`
+
+Stop and remove containers:
+
+```bash
+docker compose down
+```
+
+To also remove database volume:
+
+```bash
+docker compose down -v
 ```
 
 ## Configuration
@@ -44,3 +69,7 @@ For local overrides, use Spring profiles, environment variables, or your IDE run
 - `GET /api/campaigns/{campaignId}`
 - `GET /api/jobs/{jobId}`
 - `POST /api/campaigns/{campaignId}/publish/linkedin`
+- `POST /api/campaigns/{campaignId}/publish/meta/instagram`
+  - Body: `{"imageUrl":"https://public-cdn.example.com/image.jpg","caption":"optional override"}`
+  - Requires `INSTAGRAM_ACCESS_TOKEN` and `INSTAGRAM_IG_USER_ID`
+  - Guardrail: campaign `review.status` must be `pass`

@@ -25,6 +25,11 @@ management:
         include: health,info
 
 app:
+  meta:
+    graph-version: ${META_GRAPH_VERSION:v25.0}
+    instagram:
+      access-token: ${INSTAGRAM_ACCESS_TOKEN:}
+      ig-user-id: ${INSTAGRAM_IG_USER_ID:}
   llm:
     google-api-key: ${GOOGLE_API_KEY:}
     google-model: ${GOOGLE_MODEL:gemini-2.0-flash}

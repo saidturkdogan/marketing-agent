@@ -1,6 +1,7 @@
 package com.marketingagent.controller;
 
 import com.marketingagent.dto.request.CampaignRequest;
+import com.marketingagent.dto.request.InstagramPublishRequest;
 import com.marketingagent.dto.response.CampaignResponse;
 import com.marketingagent.publisher.PublishResult;
 import com.marketingagent.service.CampaignService;
@@ -42,9 +43,21 @@ public class CampaignController {
         return campaignService.publishLinkedIn(campaignId);
     }
 
+    @PostMapping("/{campaignId}/publish/meta/instagram")
+    public PublishResult publishInstagram(@PathVariable String campaignId,
+                                          @RequestBody(required = false) InstagramPublishRequest request) {
+        return campaignService.publishInstagram(campaignId, request);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Map<String, String> handleNotFound(IllegalArgumentException ex) {
+        return Map.of("error", ex.getMessage());
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Map<String, String> handleConflict(IllegalStateException ex) {
         return Map.of("error", ex.getMessage());
     }
 }

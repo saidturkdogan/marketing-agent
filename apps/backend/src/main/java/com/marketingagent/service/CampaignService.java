@@ -2,6 +2,7 @@ package com.marketingagent.service;
 
 import com.marketingagent.domain.CampaignState;
 import com.marketingagent.dto.request.CampaignRequest;
+import com.marketingagent.dto.request.InstagramPublishRequest;
 import com.marketingagent.dto.response.CampaignResponse;
 import com.marketingagent.dto.response.JobResponse;
 import com.marketingagent.persistence.CampaignPersistenceService;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -79,9 +81,9 @@ public class CampaignService {
     public PublishResult publishLinkedIn(String campaignId) {
         CampaignEntity campaign = campaignPersistenceService.getCampaign(campaignId)
                 .orElseThrow(() -> new IllegalArgumentException("Campaign not found: " + campaignId));
+        ensureReviewPassed(campaign);
         Map<String, Object> assets = campaign.getAssets();
-        Map<String, Object> social = (Map<String, Object>) assets.getOrDefault("social", Map.of());
-        Map<String, Object> linkedIn = (Map<String, Object>) social.getOrDefault("LinkedIn", Map.of());
+        Map<String, Object> linkedIn = getPlatformAsset(assets, "LinkedIn");
         String content = String.valueOf(linkedIn.getOrDefault("variant_a", ""));
         if (content.isBlank()) {
             throw new IllegalArgumentException("LinkedIn content not found for campaign: " + campaignId);
@@ -89,6 +91,63 @@ public class CampaignService {
         PublishResult result = publishService.publishLinkedIn(content);
         campaignPersistenceService.savePublishLog(campaignId, result, Map.of("content", content));
         return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    public PublishResult publishInstagram(String campaignId, InstagramPublishRequest request) {
+        CampaignEntity campaign = campaignPersistenceService.getCampaign(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found: " + campaignId));
+        ensureReviewPassed(campaign);
+
+        Map<String, Object> assets = campaign.getAssets();
+        Map<String, Object> instagram = getPlatformAsset(assets, "Instagram");
+        String caption = firstNonBlank(
+                request == null ? null : request.caption(),
+                String.valueOf(instagram.getOrDefault("variant_a", ""))
+        );
+        if (caption == null || caption.isBlank()) {
+            throw new IllegalArgumentException("Instagram caption not found for campaign: " + campaignId);
+        }
+
+        String imageUrl = request == null ? null : request.imageUrl();
+        if (imageUrl == null || imageUrl.isBlank()) {
+            throw new IllegalArgumentException("imageUrl is required to publish Instagram content");
+        }
+
+        PublishResult result = publishService.publishInstagramImage(imageUrl, caption);
+        campaignPersistenceService.savePublishLog(campaignId, result, Map.of("caption", caption, "image_url", imageUrl));
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> getPlatformAsset(Map<String, Object> assets, String platformName) {
+        Map<String, Object> social = (Map<String, Object>) assets.getOrDefault("social", Map.of());
+        for (Map.Entry<String, Object> entry : social.entrySet()) {
+            if (platformName.equalsIgnoreCase(entry.getKey()) && entry.getValue() instanceof Map<?, ?> map) {
+                return (Map<String, Object>) map;
+            }
+        }
+        return Map.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void ensureReviewPassed(CampaignEntity campaign) {
+        Map<String, Object> assets = campaign.getAssets();
+        Object reviewObj = assets.get("review");
+        if (!(reviewObj instanceof Map<?, ?> review)) {
+            throw new IllegalStateException("Campaign review is missing; publishing is blocked by guardrails");
+        }
+        String status = Objects.toString(review.get("status"), "");
+        if (!"pass".equalsIgnoreCase(status)) {
+            throw new IllegalStateException("Campaign review did not pass guardrails; publishing is blocked");
+        }
+    }
+
+    private String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second;
     }
 
     private CampaignResponse mapState(CampaignState state) {
