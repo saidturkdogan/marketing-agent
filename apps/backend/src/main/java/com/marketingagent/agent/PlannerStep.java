@@ -32,10 +32,14 @@ public class PlannerStep implements AgentStep {
     public void execute(CampaignState state) {
         String planDraft = llmService.generate(
                 prompts.planner(),
-                "Topic: " + state.getTopic() + "\nPlatforms: " + state.getPlatforms() + "\nOutputs: " + state.getOutputs()
+                "Company context:\n" + state.getCompanyContext()
+                        + "\n\nTopic: " + state.getTopic()
+                        + "\nPlatforms: " + state.getPlatforms()
+                        + "\nOutputs: " + state.getOutputs()
         );
         state.putPlan("campaign_title", "Campaign: " + state.getTopic());
         state.putPlan("goal", "Generate platform-ready content assets");
+        state.putPlan("company", state.getCompanySnapshot());
         state.putPlan("target_platforms", state.getPlatforms());
         state.putPlan("requested_outputs", state.getOutputs());
         state.putPlan("draft", planDraft);

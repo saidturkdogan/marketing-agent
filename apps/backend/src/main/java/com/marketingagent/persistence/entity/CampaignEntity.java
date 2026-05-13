@@ -30,6 +30,13 @@ public class CampaignEntity {
     @Column(nullable = false, length = 2000)
     private String topic;
 
+    @Column(name = "company_id")
+    private String companyId;
+
+    @Convert(converter = MapJsonConverter.class)
+    @Column(name = "company_snapshot", columnDefinition = "text")
+    private Map<String, Object> companySnapshot;
+
     @Column(nullable = false)
     private String status;
 
@@ -79,6 +86,10 @@ public class CampaignEntity {
     public void setCampaignId(String campaignId) { this.campaignId = campaignId; }
     public String getTopic() { return topic; }
     public void setTopic(String topic) { this.topic = topic; }
+    public String getCompanyId() { return companyId; }
+    public void setCompanyId(String companyId) { this.companyId = companyId; }
+    public Map<String, Object> getCompanySnapshot() { return companySnapshot; }
+    public void setCompanySnapshot(Map<String, Object> companySnapshot) { this.companySnapshot = companySnapshot; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public List<String> getTargetPlatforms() { return targetPlatforms; }

@@ -38,6 +38,7 @@ public class RagService {
     public void storeCampaign(CampaignState state) {
         try {
             String content = objectMapper.writeValueAsString(Map.of(
+                    "company", state.getCompanySnapshot(),
                     "topic", state.getTopic(),
                     "plan", state.getPlan(),
                     "assets", state.getAssets(),
@@ -45,13 +46,9 @@ public class RagService {
             ));
 
             float[] vector = embeddingService.embed(content);
+            String vectorString = floatArrayToVectorString(vector);
 
-            RagDocumentEntity doc = new RagDocumentEntity();
-            doc.setCampaignId(state.getCampaignId());
-            doc.setTopic(state.getTopic());
-            doc.setContent(content);
-            doc.setEmbeddingVecFromArray(vector);
-            repository.save(doc);
+            repository.insertDocument(state.getCampaignId(), state.getTopic(), content, vectorString);
 
             log.info("Stored RAG document for campaign {} with {}-dim vector",
                     state.getCampaignId(), vector.length);

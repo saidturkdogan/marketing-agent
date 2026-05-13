@@ -49,6 +49,8 @@ public class CampaignPersistenceService {
         CampaignEntity campaign = campaignRepository.findByCampaignId(state.getCampaignId()).orElseGet(CampaignEntity::new);
         campaign.setCampaignId(state.getCampaignId());
         campaign.setTopic(state.getTopic());
+        campaign.setCompanyId(state.getCompanyId());
+        campaign.setCompanySnapshot(state.getCompanySnapshot());
         campaign.setStatus(state.getStatus());
         campaign.setTargetPlatforms(state.getPlatforms());
         campaign.setRequestedOutputs(state.getOutputs());

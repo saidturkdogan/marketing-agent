@@ -1,6 +1,7 @@
 package com.marketingagent.service;
 
 import com.marketingagent.domain.CampaignState;
+import com.marketingagent.domain.CompanyProfile;
 import com.marketingagent.dto.request.CampaignRequest;
 import com.marketingagent.dto.request.InstagramPublishRequest;
 import com.marketingagent.dto.response.CampaignResponse;
@@ -23,13 +24,16 @@ public class CampaignService {
     private final JavaAiOrchestratorService javaAiOrchestratorService;
     private final CampaignPersistenceService campaignPersistenceService;
     private final PublishService publishService;
+    private final CompanyService companyService;
 
     public CampaignService(JavaAiOrchestratorService javaAiOrchestratorService,
                            CampaignPersistenceService campaignPersistenceService,
-                           PublishService publishService) {
+                           PublishService publishService,
+                           CompanyService companyService) {
         this.javaAiOrchestratorService = javaAiOrchestratorService;
         this.campaignPersistenceService = campaignPersistenceService;
         this.publishService = publishService;
+        this.companyService = companyService;
     }
 
     public CampaignResponse runCampaign(CampaignRequest request) {
@@ -43,7 +47,8 @@ public class CampaignService {
                 ? List.of("social")
                 : request.outputs();
 
-        CampaignState initial = new CampaignState(campaignId, request.topic(), platforms, outputs);
+        CompanyProfile companyProfile = companyService.getProfile(request.companyId());
+        CampaignState initial = new CampaignState(campaignId, companyProfile, request.topic(), platforms, outputs);
         campaignPersistenceService.markJobRunning(jobId, campaignId);
 
         try {
@@ -62,6 +67,8 @@ public class CampaignService {
 
         return new CampaignResponse(
                 campaign.getCampaignId(),
+                campaign.getCompanyId(),
+                campaign.getCompanySnapshot(),
                 campaign.getStatus(),
                 campaign.getPlan(),
                 campaign.getAssets(),
@@ -153,6 +160,8 @@ public class CampaignService {
     private CampaignResponse mapState(CampaignState state) {
         return new CampaignResponse(
                 state.getCampaignId(),
+                state.getCompanyId(),
+                state.getCompanySnapshot(),
                 state.getStatus(),
                 state.getPlan(),
                 state.getAssets(),

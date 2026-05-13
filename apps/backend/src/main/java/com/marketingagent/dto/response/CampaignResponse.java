@@ -5,6 +5,8 @@ import java.util.Map;
 
 public record CampaignResponse(
         String campaign_id,
+        String company_id,
+        Map<String, Object> company,
         String status,
         Map<String, Object> plan,
         Map<String, Object> assets,

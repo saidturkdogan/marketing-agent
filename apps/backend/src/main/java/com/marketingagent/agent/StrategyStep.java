@@ -34,10 +34,15 @@ public class StrategyStep implements AgentStep {
 
     @Override
     public void execute(CampaignState state) {
-        List<String> context = ragService.retrieveContext(state.getTopic(), 3);
+        String retrievalQuery = state.getCompanyProfile().name() + " " + state.getTopic() + " " + state.getCompanyProfile().industry();
+        List<String> context = ragService.retrieveContext(retrievalQuery, 3);
         String strategy = llmService.generate(
                 prompts.strategist(),
-                "Topic: " + state.getTopic() + "\nPlan: " + state.getPlan() + "\nResearch: " + state.getAssets().get("research") + "\nSimilar campaigns: " + context
+                "Company context:\n" + state.getCompanyContext()
+                        + "\n\nTopic: " + state.getTopic()
+                        + "\nPlan: " + state.getPlan()
+                        + "\nResearch: " + state.getAssets().get("research")
+                        + "\nSimilar campaigns: " + context
         );
         state.putAsset("strategy", Map.of(
                 "positioning", strategy,

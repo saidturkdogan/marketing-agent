@@ -1,12 +1,31 @@
 package com.marketingagent.rag;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 public interface RagDocumentRepository extends JpaRepository<RagDocumentEntity, Long> {
+
+    /**
+     * Stores a RAG document with explicit PostgreSQL vector casting.
+     *
+     * Hibernate sees embedding_vec as a String field and sends it as varchar when
+     * using repository.save(...). Native SQL keeps pgvector typing explicit.
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+            INSERT INTO rag_documents (campaign_id, topic, content, embedding_vec, created_at)
+            VALUES (:campaignId, :topic, :content, cast(:embeddingVec as vector), now())
+            """, nativeQuery = true)
+    void insertDocument(@Param("campaignId") String campaignId,
+                        @Param("topic") String topic,
+                        @Param("content") String content,
+                        @Param("embeddingVec") String embeddingVec);
 
     /**
      * Semantic similarity search using pgvector's cosine distance operator (<=>).

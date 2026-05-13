@@ -13,3 +13,8 @@ apps/frontend/dist/
 
 # Logs
 *.log
+
+# Local env / secrets
+.env
+.env.local
+*.env.local

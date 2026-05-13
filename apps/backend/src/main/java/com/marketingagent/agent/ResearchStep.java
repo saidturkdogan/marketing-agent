@@ -43,7 +43,10 @@ public class ResearchStep implements AgentStep {
         Map<String, Object> keywords = seoToolService.keywords(state.getTopic());
         String brief = llmService.generate(
                 prompts.researcher(),
-                "Topic: " + state.getTopic() + "\nTrends: " + trends + "\nKeywords: " + keywords
+                "Company context:\n" + state.getCompanyContext()
+                        + "\n\nTopic: " + state.getTopic()
+                        + "\nTrends: " + trends
+                        + "\nKeywords: " + keywords
         );
         state.putAsset("research", Map.of(
                 "brief", brief,

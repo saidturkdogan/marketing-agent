@@ -7,6 +7,7 @@ import java.util.Map;
 
 public class CampaignState {
     private final String campaignId;
+    private final CompanyProfile companyProfile;
     private final String topic;
     private final List<String> platforms;
     private final List<String> outputs;
@@ -16,8 +17,9 @@ public class CampaignState {
     private double performanceScore = 0.0;
     private String status = "running";
 
-    public CampaignState(String campaignId, String topic, List<String> platforms, List<String> outputs) {
+    public CampaignState(String campaignId, CompanyProfile companyProfile, String topic, List<String> platforms, List<String> outputs) {
         this.campaignId = campaignId;
+        this.companyProfile = companyProfile;
         this.topic = topic;
         this.platforms = platforms;
         this.outputs = outputs;
@@ -25,6 +27,22 @@ public class CampaignState {
 
     public String getCampaignId() {
         return campaignId;
+    }
+
+    public CompanyProfile getCompanyProfile() {
+        return companyProfile;
+    }
+
+    public String getCompanyId() {
+        return companyProfile.companyId();
+    }
+
+    public Map<String, Object> getCompanySnapshot() {
+        return companyProfile.toMap();
+    }
+
+    public String getCompanyContext() {
+        return companyProfile.toPromptContext();
     }
 
     public String getTopic() {
