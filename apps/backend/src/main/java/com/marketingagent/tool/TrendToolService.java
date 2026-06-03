@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class TrendToolService {
+public class TrendToolService implements TrendTool {
 
     public Map<String, Object> trends(String topic) {
         return Map.of(

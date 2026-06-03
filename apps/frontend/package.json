@@ -1,7 +1,7 @@
 {
   "name": "marketing-agent-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,7 +19,13 @@
     "vite": "^5.4.19"
   },
   "dependencies": {
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.468.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "react-markdown": "^9.1.0",
+    "react-router-dom": "^7.1.0",
+    "remark-gfm": "^4.0.0",
+    "zustand": "^5.0.4"
   }
 }

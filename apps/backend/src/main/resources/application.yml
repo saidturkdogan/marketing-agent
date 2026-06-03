@@ -25,6 +25,9 @@ management:
         include: health,info
 
 app:
+  jwt:
+    secret: ${JWT_SECRET:dGhpcy1pcy1hLXNlY3JldC1rZXktZm9yLWp3dC10b2tlbnMtYW5kLWl0LW5lZWRzLXRvLWJlLTI1Ni1iaXRzLWxvbmc}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   meta:
     graph-version: ${META_GRAPH_VERSION:v25.0}
     instagram:

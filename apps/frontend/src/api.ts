@@ -1,9 +1,25 @@
-import type { CampaignPayload, CampaignResponse, Company, CompanyPayload } from "./types";
+import type { AuthResponse, Company, CompanyPayload } from "./types";
+
+let tokenGetter: (() => string | null) = () => null;
+
+export function setTokenGetter(fn: () => string | null) {
+  tokenGetter = fn;
+}
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = tokenGetter();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options?.headers as Record<string, string> | undefined),
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const response = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
+    headers,
   });
 
   if (!response.ok) {
@@ -14,6 +30,22 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+// Auth
+export function login(email: string, password: string) {
+  return request<AuthResponse>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function register(email: string, password: string, name: string) {
+  return request<AuthResponse>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password, name }),
+  });
+}
+
+// Companies
 export function listCompanies() {
   return request<Company[]>("/api/companies");
 }
@@ -32,19 +64,6 @@ export function updateCompany(companyId: string, payload: CompanyPayload) {
   });
 }
 
-export function createCampaign(payload: CampaignPayload) {
-  return request<CampaignResponse>("/api/campaigns", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function publishLinkedIn(campaignId: string) {
-  return request<{ status: string; url?: string }>(`/api/campaigns/${campaignId}/publish/linkedin`, {
-    method: "POST",
-  });
-}
-
-export async function healthCheck() {
-  return request<{ status: string }>("/api/health");
+export function getCompany(companyId: string) {
+  return request<Company>(`/api/companies/${companyId}`);
 }

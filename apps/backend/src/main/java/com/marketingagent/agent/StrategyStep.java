@@ -43,13 +43,37 @@ public class StrategyStep implements AgentStep {
                         + "\nPlan: " + state.getPlan()
                         + "\nResearch: " + state.getAssets().get("research")
                         + "\nSimilar campaigns: " + context
+                        + "\n\nAt the end, output exactly three content pillars separated by ' | ' on a line starting with 'PILLARS:'"
         );
+        List<String> pillars = extractPillars(strategy);
+        String cta = extractCta(strategy);
         state.putAsset("strategy", Map.of(
                 "positioning", strategy,
-                "content_pillars", List.of("Pain", "Solution", "Outcome"),
-                "cta", "Book a demo",
+                "content_pillars", pillars,
+                "cta", cta,
                 "rag_context_count", context.size()
         ));
         state.completeStep(name());
+    }
+
+    private List<String> extractPillars(String text) {
+        if (text == null) return List.of("Pain", "Solution", "Outcome");
+        for (String line : text.lines().toList()) {
+            if (line.contains("PILLARS:") || line.contains("Pillars:") || line.contains("pillars:")) {
+                String raw = line.substring(line.indexOf(":") + 1).trim();
+                return List.of(raw.split("\\s*\\|\\s*"));
+            }
+        }
+        return List.of("Pain", "Solution", "Outcome");
+    }
+
+    private String extractCta(String text) {
+        if (text == null) return "Book a demo";
+        for (String line : text.lines().toList()) {
+            if (line.contains("CTA:") || line.contains("Cta:") || line.contains("cta:")) {
+                return line.substring(line.indexOf(":") + 1).trim();
+            }
+        }
+        return "Book a demo";
     }
 }

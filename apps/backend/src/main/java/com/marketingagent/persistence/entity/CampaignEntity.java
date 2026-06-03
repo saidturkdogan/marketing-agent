@@ -104,4 +104,5 @@ public class CampaignEntity {
     public void setCompletedSteps(List<String> completedSteps) { this.completedSteps = completedSteps; }
     public Double getPerformanceScore() { return performanceScore; }
     public void setPerformanceScore(Double performanceScore) { this.performanceScore = performanceScore; }
+    public OffsetDateTime getCreatedAt() { return createdAt; }
 }

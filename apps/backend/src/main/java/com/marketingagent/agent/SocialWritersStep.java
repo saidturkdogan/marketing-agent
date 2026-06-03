@@ -11,12 +11,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 @Component
 public class SocialWritersStep implements AgentStep {
+
+    private static final ExecutorService EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private final LlmService llmService;
     private final PromptCatalog prompts;
@@ -40,7 +43,6 @@ public class SocialWritersStep implements AgentStep {
 
     @Override
     public void execute(CampaignState state) {
-        ExecutorService executor = Executors.newFixedThreadPool(Math.max(1, state.getPlatforms().size()));
         List<Callable<Map.Entry<String, Map<String, Object>>>> tasks = new ArrayList<>();
 
         for (String platform : state.getPlatforms()) {
@@ -68,16 +70,17 @@ public class SocialWritersStep implements AgentStep {
         }
 
         try {
-            List<Future<Map.Entry<String, Map<String, Object>>>> futures = executor.invokeAll(tasks);
+            List<Future<Map.Entry<String, Map<String, Object>>>> futures = EXECUTOR.invokeAll(tasks);
             for (Future<Map.Entry<String, Map<String, Object>>> future : futures) {
                 Map.Entry<String, Map<String, Object>> item = future.get();
                 state.putSocialAsset(item.getKey(), item.getValue());
             }
             state.completeStep(name());
-        } catch (Exception ex) {
-            throw new IllegalStateException("Social writer execution failed", ex);
-        } finally {
-            executor.shutdown();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Social writer execution interrupted", ex);
+        } catch (ExecutionException ex) {
+            throw new IllegalStateException("Social writer execution failed", ex.getCause());
         }
     }
 }

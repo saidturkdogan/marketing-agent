@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class CampaignService {
@@ -85,6 +86,21 @@ public class CampaignService {
     }
 
     @SuppressWarnings("unchecked")
+    public List<CampaignResponse> listCampaigns() {
+        return campaignPersistenceService.listCampaigns().stream()
+                .map(entity -> new CampaignResponse(
+                        entity.getCampaignId(),
+                        entity.getCompanyId(),
+                        entity.getCompanySnapshot(),
+                        entity.getStatus(),
+                        entity.getPlan(),
+                        entity.getAssets(),
+                        entity.getCompletedSteps(),
+                        entity.getPerformanceScore()
+                ))
+                .collect(Collectors.toList());
+    }
+
     public PublishResult publishLinkedIn(String campaignId) {
         CampaignEntity campaign = campaignPersistenceService.getCampaign(campaignId)
                 .orElseThrow(() -> new IllegalArgumentException("Campaign not found: " + campaignId));

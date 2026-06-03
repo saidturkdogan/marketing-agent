@@ -63,6 +63,9 @@ public class CompanyEntity {
     @Column(name = "social_links", columnDefinition = "text")
     private Map<String, Object> socialLinks;
 
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -106,6 +109,8 @@ public class CompanyEntity {
     public void setCompetitors(List<String> competitors) { this.competitors = competitors; }
     public Map<String, Object> getSocialLinks() { return socialLinks; }
     public void setSocialLinks(Map<String, Object> socialLinks) { this.socialLinks = socialLinks; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
 }

@@ -5,6 +5,7 @@ import com.marketingagent.dto.request.CompanyRequest;
 import com.marketingagent.dto.response.CompanyResponse;
 import com.marketingagent.persistence.entity.CompanyEntity;
 import com.marketingagent.persistence.repository.CompanyRepository;
+import com.marketingagent.security.AuthUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,43 +18,51 @@ import java.util.UUID;
 public class CompanyService {
 
     private final CompanyRepository companyRepository;
+    private final AuthUtils authUtils;
 
-    public CompanyService(CompanyRepository companyRepository) {
+    public CompanyService(CompanyRepository companyRepository, AuthUtils authUtils) {
         this.companyRepository = companyRepository;
+        this.authUtils = authUtils;
     }
 
     public List<CompanyResponse> listCompanies() {
-        return companyRepository.findAll().stream()
+        Long userId = authUtils.getCurrentUserId();
+        return companyRepository.findByUserId(userId).stream()
                 .sorted(Comparator.comparing(CompanyEntity::getCreatedAt).reversed())
                 .map(this::toResponse)
                 .toList();
     }
 
     public CompanyResponse getCompany(String companyId) {
-        return toResponse(findByCompanyId(companyId));
+        Long userId = authUtils.getCurrentUserId();
+        return toResponse(findByCompanyIdAndUser(companyId, userId));
     }
 
     public CompanyProfile getProfile(String companyId) {
-        return toProfile(findByCompanyId(companyId));
+        Long userId = authUtils.getCurrentUserId();
+        return toProfile(findByCompanyIdAndUser(companyId, userId));
     }
 
     @Transactional
     public CompanyResponse createCompany(CompanyRequest request) {
+        Long userId = authUtils.getCurrentUserId();
         CompanyEntity company = new CompanyEntity();
         company.setCompanyId(UUID.randomUUID().toString());
+        company.setUserId(userId);
         applyRequest(company, request);
         return toResponse(companyRepository.save(company));
     }
 
     @Transactional
     public CompanyResponse updateCompany(String companyId, CompanyRequest request) {
-        CompanyEntity company = findByCompanyId(companyId);
+        Long userId = authUtils.getCurrentUserId();
+        CompanyEntity company = findByCompanyIdAndUser(companyId, userId);
         applyRequest(company, request);
         return toResponse(companyRepository.save(company));
     }
 
-    private CompanyEntity findByCompanyId(String companyId) {
-        return companyRepository.findByCompanyId(companyId)
+    private CompanyEntity findByCompanyIdAndUser(String companyId, Long userId) {
+        return companyRepository.findByCompanyIdAndUserId(companyId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("Company not found: " + companyId));
     }
 

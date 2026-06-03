@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -91,6 +92,10 @@ public class CampaignPersistenceService {
 
     public Optional<CampaignEntity> getCampaign(String campaignId) {
         return campaignRepository.findByCampaignId(campaignId);
+    }
+
+    public List<CampaignEntity> listCampaigns() {
+        return campaignRepository.findAllByOrderByCreatedAtDesc();
     }
 
     public Optional<JobEntity> getJob(String jobId) {

@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class SeoToolService {
+public class SeoToolService implements SeoTool {
 
     public Map<String, Object> keywords(String topic) {
         return Map.of(

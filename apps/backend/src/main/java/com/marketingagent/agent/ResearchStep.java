@@ -3,8 +3,8 @@ package com.marketingagent.agent;
 import com.marketingagent.domain.CampaignState;
 import com.marketingagent.llm.LlmService;
 import com.marketingagent.prompt.PromptCatalog;
-import com.marketingagent.tool.SeoToolService;
-import com.marketingagent.tool.TrendToolService;
+import com.marketingagent.tool.SeoTool;
+import com.marketingagent.tool.TrendTool;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -14,17 +14,17 @@ public class ResearchStep implements AgentStep {
 
     private final LlmService llmService;
     private final PromptCatalog prompts;
-    private final TrendToolService trendToolService;
-    private final SeoToolService seoToolService;
+    private final TrendTool trendTool;
+    private final SeoTool seoTool;
 
     public ResearchStep(LlmService llmService,
                         PromptCatalog prompts,
-                        TrendToolService trendToolService,
-                        SeoToolService seoToolService) {
+                        TrendTool trendTool,
+                        SeoTool seoTool) {
         this.llmService = llmService;
         this.prompts = prompts;
-        this.trendToolService = trendToolService;
-        this.seoToolService = seoToolService;
+        this.trendTool = trendTool;
+        this.seoTool = seoTool;
     }
 
     @Override
@@ -39,8 +39,8 @@ public class ResearchStep implements AgentStep {
 
     @Override
     public void execute(CampaignState state) {
-        Map<String, Object> trends = trendToolService.trends(state.getTopic());
-        Map<String, Object> keywords = seoToolService.keywords(state.getTopic());
+        Map<String, Object> trends = trendTool.trends(state.getTopic());
+        Map<String, Object> keywords = seoTool.keywords(state.getTopic());
         String brief = llmService.generate(
                 prompts.researcher(),
                 "Company context:\n" + state.getCompanyContext()

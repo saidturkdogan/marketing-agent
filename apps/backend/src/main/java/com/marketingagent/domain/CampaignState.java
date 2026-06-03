@@ -1,9 +1,11 @@
 package com.marketingagent.domain;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class CampaignState {
     private final String campaignId;
@@ -11,11 +13,11 @@ public class CampaignState {
     private final String topic;
     private final List<String> platforms;
     private final List<String> outputs;
-    private final Map<String, Object> plan = new LinkedHashMap<>();
-    private final Map<String, Object> assets = new LinkedHashMap<>();
-    private final List<String> completedSteps = new ArrayList<>();
-    private double performanceScore = 0.0;
-    private String status = "running";
+    private final Map<String, Object> plan;
+    private final Map<String, Object> assets;
+    private final List<String> completedSteps;
+    private volatile double performanceScore = 0.0;
+    private volatile String status = "running";
 
     public CampaignState(String campaignId, CompanyProfile companyProfile, String topic, List<String> platforms, List<String> outputs) {
         this.campaignId = campaignId;
@@ -23,6 +25,9 @@ public class CampaignState {
         this.topic = topic;
         this.platforms = platforms;
         this.outputs = outputs;
+        this.plan = new LinkedHashMap<>();
+        this.assets = new ConcurrentHashMap<>();
+        this.completedSteps = Collections.synchronizedList(new ArrayList<>());
     }
 
     public String getCampaignId() {
@@ -95,7 +100,7 @@ public class CampaignState {
 
     @SuppressWarnings("unchecked")
     public void putSocialAsset(String platform, Map<String, Object> value) {
-        Map<String, Object> social = (Map<String, Object>) assets.computeIfAbsent("social", k -> new LinkedHashMap<>());
+        Map<String, Object> social = (Map<String, Object>) assets.computeIfAbsent("social", k -> new ConcurrentHashMap<>());
         social.put(platform, value);
     }
 
