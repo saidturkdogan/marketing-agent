@@ -1,6 +1,6 @@
 import type { AuthResponse, Company, CompanyPayload } from "./types";
 
-let tokenGetter: (() => string | null) = () => null;
+let tokenGetter: () => string | null = () => null;
 
 export function setTokenGetter(fn: () => string | null) {
   tokenGetter = fn;
@@ -66,4 +66,12 @@ export function updateCompany(companyId: string, payload: CompanyPayload) {
 
 export function getCompany(companyId: string) {
   return request<Company>(`/api/companies/${companyId}`);
+}
+
+// Chat
+export function sendChatMessage(companyId: string, message: string) {
+  return request<{ response: string }>(`/api/chat/${companyId}`, {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
 }
