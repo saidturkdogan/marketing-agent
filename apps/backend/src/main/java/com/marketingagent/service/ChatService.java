@@ -1,16 +1,24 @@
 package com.marketingagent.service;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketingagent.domain.CompanyProfile;
 import com.marketingagent.llm.LlmService;
+import com.marketingagent.persistence.entity.ChatMessageEntity;
+import com.marketingagent.persistence.entity.ConversationEntity;
+import com.marketingagent.persistence.repository.ChatMessageRepository;
+import com.marketingagent.persistence.repository.ConversationRepository;
+import com.marketingagent.security.AuthUtils;
 import com.marketingagent.tool.PlatformToolService;
 import com.marketingagent.tool.PolicyToolService;
 import com.marketingagent.tool.SeoTool;
@@ -28,10 +36,16 @@ public class ChatService {
     private final PolicyToolService policyToolService;
     private final CompanyService companyService;
     private final ObjectMapper objectMapper;
+    private final ConversationRepository conversationRepository;
+    private final ChatMessageRepository chatMessageRepository;
+    private final AuthUtils authUtils;
 
     public ChatService(LlmService llmService, SeoTool seoTool, TrendTool trendTool,
                        PlatformToolService platformToolService, PolicyToolService policyToolService,
-                       CompanyService companyService, ObjectMapper objectMapper) {
+                       CompanyService companyService, ObjectMapper objectMapper,
+                       ConversationRepository conversationRepository,
+                       ChatMessageRepository chatMessageRepository,
+                       AuthUtils authUtils) {
         this.llmService = llmService;
         this.seoTool = seoTool;
         this.trendTool = trendTool;
@@ -39,9 +53,23 @@ public class ChatService {
         this.policyToolService = policyToolService;
         this.companyService = companyService;
         this.objectMapper = objectMapper;
+        this.conversationRepository = conversationRepository;
+        this.chatMessageRepository = chatMessageRepository;
+        this.authUtils = authUtils;
     }
 
+    @Transactional
     public String chat(String companyId, String userMessage) {
+        return processChat(companyId, userMessage);
+    }
+
+    @Transactional
+    public Map<String, Object> chat(String companyId, String conversationId, String userMessage) {
+        String response = processChat(companyId, userMessage);
+        return Map.of("response", response, "conversationId", conversationId);
+    }
+
+    private String processChat(String companyId, String userMessage) {
         CompanyProfile profile = companyService.getProfile(companyId);
 
         // Step 1: Let AI decide which tools to use
@@ -56,8 +84,79 @@ public class ChatService {
         return finalResponse;
     }
 
+    @Transactional
+    public Map<String, String> getOrCreateConversation(String companyId, String firstMessage) {
+        Long userId = authUtils.getCurrentUserId();
+        String title = firstMessage.length() > 60 ? firstMessage.substring(0, 60) + "..." : firstMessage;
+
+        String conversationId = UUID.randomUUID().toString();
+        ConversationEntity conversation = new ConversationEntity();
+        conversation.setConversationId(conversationId);
+        conversation.setTitle(title);
+        conversation.setCompanyId(companyId);
+        conversation.setUserId(userId);
+        conversationRepository.save(conversation);
+
+        return Map.of("conversationId", conversationId, "title", title);
+    }
+
+    @Transactional
+    public void saveMessage(String conversationId, String role, String content) {
+        ChatMessageEntity msg = new ChatMessageEntity();
+        msg.setMessageId(UUID.randomUUID().toString());
+        msg.setConversationId(conversationId);
+        msg.setRole(role);
+        msg.setContent(content);
+        msg.setTimestamp(OffsetDateTime.now());
+        chatMessageRepository.save(msg);
+
+        // Update conversation's updatedAt
+        conversationRepository.findByConversationId(conversationId).ifPresent(conv -> {
+            conv.setUpdatedAt(OffsetDateTime.now());
+            conversationRepository.save(conv);
+        });
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getConversations(String companyId) {
+        Long userId = authUtils.getCurrentUserId();
+        List<ConversationEntity> conversations;
+        if (companyId != null && !companyId.isBlank()) {
+            conversations = conversationRepository.findByUserIdAndCompanyIdOrderByUpdatedAtDesc(userId, companyId);
+        } else {
+            conversations = conversationRepository.findByUserIdOrderByUpdatedAtDesc(userId);
+        }
+
+        return conversations.stream().map(conv -> {
+            Map<String, Object> map = new java.util.LinkedHashMap<>();
+            map.put("id", conv.getConversationId());
+            map.put("title", conv.getTitle());
+            map.put("companyId", conv.getCompanyId());
+            map.put("createdAt", conv.getCreatedAt().toString());
+            map.put("updatedAt", conv.getUpdatedAt().toString());
+            return map;
+        }).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getMessages(String conversationId) {
+        return chatMessageRepository.findByConversationIdOrderByTimestampAsc(conversationId).stream().map(msg -> {
+            Map<String, Object> map = new java.util.LinkedHashMap<>();
+            map.put("id", msg.getMessageId());
+            map.put("role", msg.getRole());
+            map.put("content", msg.getContent());
+            map.put("timestamp", msg.getTimestamp().toString());
+            return map;
+        }).toList();
+    }
+
     public ChatStreamer chatStreaming(String companyId, String userMessage) {
         return new ChatStreamer(this, companyService, companyId, userMessage);
+    }
+
+    @Transactional
+    public ChatStreamer chatStreaming(String companyId, String conversationId, String userMessage) {
+        return new ChatStreamer(this, companyService, companyId, conversationId, userMessage);
     }
 
     String executeToolsFromDecision(String toolDecision, String userMessage, CompanyProfile profile) {
@@ -252,6 +351,7 @@ public class ChatService {
         private final CompanyService companyService;
         private final String companyId;
         private final String userMessage;
+        private final String conversationId;
         private String finalResponse;
 
         ChatStreamer(ChatService chatService, CompanyService companyService, String companyId, String userMessage) {
@@ -259,6 +359,15 @@ public class ChatService {
             this.companyService = companyService;
             this.companyId = companyId;
             this.userMessage = userMessage;
+            this.conversationId = null;
+        }
+
+        ChatStreamer(ChatService chatService, CompanyService companyService, String companyId, String conversationId, String userMessage) {
+            this.chatService = chatService;
+            this.companyService = companyService;
+            this.companyId = companyId;
+            this.userMessage = userMessage;
+            this.conversationId = conversationId;
         }
 
         public String getFinalResponse() {
@@ -270,6 +379,10 @@ public class ChatService {
 
         public String getCompanyId() {
             return companyId;
+        }
+
+        public String getConversationId() {
+            return conversationId;
         }
     }
 }

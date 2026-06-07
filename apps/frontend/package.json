@@ -19,6 +19,7 @@
     "vite": "^5.4.19"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.22.0",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.468.0",
     "react": "^19.2.6",

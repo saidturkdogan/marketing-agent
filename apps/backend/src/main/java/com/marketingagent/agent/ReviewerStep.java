@@ -34,11 +34,24 @@ public class ReviewerStep implements AgentStep {
     @Override
     public void execute(CampaignState state) {
         String assetsText = String.valueOf(state.getAssets());
-        String policy = policyToolService.check(assetsText);
-        String verdict = llmService.generate(prompts.reviewer(), "Assets: " + assetsText + "\nPolicy check: " + policy);
+        String policyResult = policyToolService.check(assetsText);
+        boolean policyPassed = "pass".equals(policyResult);
+
+        String verdict = llmService.generate(
+                prompts.reviewer(),
+                "Campaign topic: " + state.getTopic()
+                        + "\nCompany: " + state.getCompanyProfile().name()
+                        + "\nAssets: " + assetsText
+                        + "\n\nPolicy check result: " + policyResult
+                        + (policyPassed
+                                ? "\nPolicy check passed. Review for strategic consistency, platform fit, clarity, and completeness."
+                                : "\nPolicy check found issues. Review the flagged content and suggest specific rewrites.")
+        );
+
         state.putAsset("review", Map.of(
-                "status", policy.equals("pass") ? "pass" : "needs_revision",
-                "policy", policy,
+                "status", policyPassed ? "pass" : "needs_revision",
+                "policy_result", policyResult,
+                "policy_passed", policyPassed,
                 "verdict", verdict
         ));
         state.completeStep(name());

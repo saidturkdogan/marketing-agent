@@ -1,5 +1,6 @@
 package com.marketingagent.controller;
 
+import com.marketingagent.dto.request.ClerkUserSyncRequest;
 import com.marketingagent.dto.request.LoginRequest;
 import com.marketingagent.dto.request.RegisterRequest;
 import com.marketingagent.dto.response.AuthResponse;
@@ -28,6 +29,25 @@ public class AuthController {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+    }
+
+    @PostMapping("/clerk/sync")
+    public AuthResponse clerkSync(@Valid @RequestBody ClerkUserSyncRequest request) {
+        var user = userRepository.findByEmail(request.email()).orElseGet(() -> {
+            var newUser = new UserEntity();
+            newUser.setEmail(request.email());
+            newUser.setPasswordHash("CLERK_" + request.clerkUserId());
+            newUser.setName(request.name() != null ? request.name() : request.email());
+            return userRepository.save(newUser);
+        });
+
+        if (request.name() != null && !request.name().isEmpty()) {
+            user.setName(request.name());
+            userRepository.save(user);
+        }
+
+        var token = jwtService.generateToken(user.getEmail());
+        return new AuthResponse(token, user.getEmail(), user.getName());
     }
 
     @PostMapping("/register")

@@ -25,6 +25,9 @@ services:
       DATABASE_URL: jdbc:postgresql://db:5432/marketing_agent
       DATABASE_USER: postgres
       DATABASE_PASSWORD: secret
+      CLERK_JWKS_URL: ${CLERK_JWKS_URL:-https://pleasing-earthworm-57.clerk.accounts.dev/.well-known/jwks.json}
+      CLERK_ISSUER: ${CLERK_ISSUER:-https://pleasing-earthworm-57.clerk.accounts.dev}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-sk_test_5910fCaeKkERofMXdKhd9anvd3VjOsTYPv4CZyypAH}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       GOOGLE_MODEL: ${GOOGLE_MODEL:-gemini-2.0-flash}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
@@ -47,6 +50,7 @@ services:
     container_name: marketing-agent-frontend
     environment:
       VITE_BACKEND_URL: http://backend:8080
+      VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-pk_test_cGxlYXNhbnQtZWFyd2lnLTU3LmNsZXJrLmFjY291bnRzLmRldiQ}
     ports:
       - "5173:5173"
     depends_on:

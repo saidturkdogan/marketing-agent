@@ -37,3 +37,21 @@ export type AuthResponse = {
   email: string;
   name: string;
 };
+
+export type CampaignResponse = {
+  campaign_id: string;
+  company_id: string;
+  company: Record<string, unknown>;
+  status: string;
+  plan: Record<string, unknown>;
+  assets: Record<string, unknown>;
+  completed_steps: string[];
+  performance_score: number;
+};
+
+export type CampaignRequest = {
+  companyId: string;
+  topic: string;
+  platforms?: string[];
+  outputs?: string[];
+};

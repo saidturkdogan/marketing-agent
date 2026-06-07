@@ -50,14 +50,28 @@ public class AnalyticsStep implements AgentStep {
                 "performance_score", score,
                 "learnings", learnings
         ));
+        storeToRagIfQualityMet(state, score);
+        state.completeStep(name());
+    }
+
+    private static final double RAG_STORE_THRESHOLD = 0.4;
+
+    private void storeToRagIfQualityMet(CampaignState state, double score) {
+        if (score < RAG_STORE_THRESHOLD) {
+            log.info("Campaign {} scored {}. RAG storage skipped (threshold={}).",
+                    state.getCampaignId(), String.format("%.2f", score), RAG_STORE_THRESHOLD);
+            state.putAsset("rag", Map.of("stored", false, "reason",
+                    "score " + String.format("%.2f", score) + " below threshold " + RAG_STORE_THRESHOLD));
+            return;
+        }
         try {
             ragService.storeCampaign(state);
             state.putAsset("rag", Map.of("stored", true));
+            log.info("Campaign {} stored in RAG with score {}", state.getCampaignId(), String.format("%.2f", score));
         } catch (Exception ex) {
             log.error("RAG storage failed for campaign {}", state.getCampaignId(), ex);
             state.putAsset("rag", Map.of("stored", false, "reason", ex.getMessage()));
         }
-        state.completeStep(name());
     }
 
     /**

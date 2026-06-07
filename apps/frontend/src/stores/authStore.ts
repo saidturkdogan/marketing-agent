@@ -5,8 +5,11 @@ export type AuthState = {
   token: string | null;
   email: string | null;
   name: string | null;
-  setAuth: (token: string, email: string, name: string) => void;
+  userId: string | null;
+  isSignedIn: boolean;
+  setAuth: (token: string, email: string, name: string, userId?: string) => void;
   clearAuth: () => void;
+  setIsSignedIn: (val: boolean) => void;
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -15,8 +18,11 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       email: null,
       name: null,
-      setAuth: (token, email, name) => set({ token, email, name }),
-      clearAuth: () => set({ token: null, email: null, name: null }),
+      userId: null,
+      isSignedIn: false,
+      setAuth: (token, email, name, userId) => set({ token, email, name, userId: userId || null }),
+      clearAuth: () => set({ token: null, email: null, name: null, userId: null, isSignedIn: false }),
+      setIsSignedIn: (val) => set({ isSignedIn: val }),
     }),
     { name: "auth-storage" }
   )

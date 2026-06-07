@@ -45,6 +45,7 @@ public class ResearchStep implements AgentStep {
                 prompts.researcher(),
                 "Company context:\n" + state.getCompanyContext()
                         + "\n\nTopic: " + state.getTopic()
+                        + "\nPlan: " + state.getPlan()
                         + "\nTrends: " + trends
                         + "\nKeywords: " + keywords
         );
