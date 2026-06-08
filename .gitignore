@@ -3,6 +3,10 @@
 .idea/
 .vscode/
 
+# Graphify
+graphify-out/
+apps/graphify-out/
+
 # Java / Maven
 apps/backend/target/
 *.class

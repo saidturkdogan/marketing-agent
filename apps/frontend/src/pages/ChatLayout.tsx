@@ -143,18 +143,29 @@ export function ChatLayout() {
     navigate(`/chat`, { replace: true });
   }
 
+  // --- Loading ---
+  if (isLoadingCompanies) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-950">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600">
+          <div className="h-5 w-5 animate-pulse rounded-full bg-blue-300/50" />
+        </div>
+      </div>
+    );
+  }
+
   // --- Onboarding render ---
-  if (!isLoadingCompanies && companies.length === 0 && !createdRef.current) {
+  if (companies.length === 0 && !createdRef.current) {
     return (
       <div className="flex h-screen w-screen overflow-hidden bg-slate-950">
         <div className="hidden lg:flex w-[420px] flex-col justify-between p-10 bg-gradient-to-br from-slate-900 to-slate-950 border-r border-slate-800/50">
           <div>
             <div className="flex items-center gap-3 mb-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600"><Sparkles className="h-5 w-5 text-white" /></div>
-              <span className="text-lg font-semibold text-white">Marketing AI</span>
+              <span className="text-lg font-semibold text-white">Plinth</span>
             </div>
             <p className="text-slate-400 text-sm leading-relaxed">
-              Autonomous marketing team. Research, strategy, content, analytics — all in one agent.
+              Autonomous marketing agent. Research, strategy, content, analytics — all in one.
             </p>
           </div>
           <button onClick={handleLogout} className="text-sm text-slate-500 hover:text-slate-300 transition-colors text-left">Sign out</button>
@@ -164,7 +175,7 @@ export function ChatLayout() {
           <div className="w-full max-w-lg">
             <div className="lg:hidden flex items-center gap-3 mb-8">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600"><Sparkles className="h-4 w-4 text-white" /></div>
-              <span className="text-base font-semibold text-white">Marketing AI</span>
+              <span className="text-base font-semibold text-white">Plinth</span>
             </div>
 
             {/* STEP 1: GOAL */}
@@ -273,7 +284,7 @@ export function ChatLayout() {
                 <button onClick={handleLaunch} disabled={!name.trim()}
                   className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-4 mt-8 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                   <Rocket className="h-4 w-4" />
-                  Launch AI Marketing Team
+                  Launch Plinth AI Agent
                 </button>
               </div>
             )}

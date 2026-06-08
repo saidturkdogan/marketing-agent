@@ -10,11 +10,11 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.marketingagent</groupId>
-    <artifactId>backend</artifactId>
+    <groupId>com.plinth</groupId>
+    <artifactId>plinth-backend</artifactId>
     <version>0.1.0</version>
-    <name>marketing-api</name>
-    <description>Full Java backend for marketing agent</description>
+    <name>plinth-api</name>
+    <description>Plinth — AI marketing agent backend</description>
 
     <properties>
         <java.version>21</java.version>

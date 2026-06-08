@@ -6,6 +6,8 @@ import { useAuthStore } from "./stores/authStore";
 import { ClerkAuthPage } from "./pages/ClerkAuthPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ChatLayout } from "./pages/ChatLayout";
+import { OnboardingPage } from "./pages/OnboardingPage";
+import { DashboardPage } from "./pages/DashboardPage";
 
 type Props = { clerkEnabled: boolean };
 
@@ -47,9 +49,11 @@ function ClerkApp() {
 
   return (
     <Routes>
-      <Route path="/login" element={isSignedIn ? <Navigate to="/chat" replace /> : <ClerkAuthPage />} />
+      <Route path="/login" element={isSignedIn ? <Navigate to="/onboarding" replace /> : <ClerkAuthPage />} />
       <Route path="/chat/:conversationId?" element={isSignedIn ? <ChatLayout /> : <Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to={isSignedIn ? "/chat" : "/login"} replace />} />
+      <Route path="/onboarding" element={isSignedIn ? <OnboardingPage /> : <Navigate to="/login" replace />} />
+      <Route path="/dashboard/:companyId" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to={isSignedIn ? "/onboarding" : "/login"} replace />} />
     </Routes>
   );
 }
@@ -63,9 +67,11 @@ function DefaultApp() {
 
   return (
     <Routes>
-      <Route path="/login" element={token ? <Navigate to="/chat" replace /> : <LoginPage />} />
+      <Route path="/login" element={token ? <Navigate to="/onboarding" replace /> : <LoginPage />} />
       <Route path="/chat/:conversationId?" element={token ? <ChatLayout /> : <Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to={token ? "/chat" : "/login"} replace />} />
+      <Route path="/onboarding" element={token ? <OnboardingPage /> : <Navigate to="/login" replace />} />
+      <Route path="/dashboard/:companyId" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to={token ? "/onboarding" : "/login"} replace />} />
     </Routes>
   );
 }

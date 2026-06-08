@@ -58,10 +58,10 @@ export function ClerkAuthPage() {
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600">
               <Sparkles className="h-6 w-6 text-white" />
             </div>
-            <span className="text-2xl font-bold text-white">Marketing AI</span>
+            <span className="text-2xl font-bold text-white">Plinth</span>
           </div>
           <h1 className="text-4xl font-bold text-white leading-tight mb-4">
-            Your autonomous<br />marketing team
+            Your autonomous<br />Plinth AI agent
           </h1>
           <p className="text-slate-400 text-lg leading-relaxed mb-8">
             Research, strategy, content, and analytics — powered by AI agents that work while you sleep.
@@ -90,7 +90,7 @@ export function ClerkAuthPage() {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
-          <span className="text-xl font-bold text-white">Marketing AI</span>
+          <span className="text-xl font-bold text-white">Plinth</span>
         </div>
 
         <div className="w-full max-w-md">

@@ -1,6 +1,6 @@
-# Marketing Agent
+# Plinth
 
-Java-first marketing campaign backend with a Vite frontend.
+AI-powered marketing agent with a Spring Boot backend and Vite frontend.
 
 ## Architecture
 
@@ -20,7 +20,7 @@ mvn spring-boot:run
 Backend defaults:
 
 - API port: `8080`
-- Database URL: `jdbc:postgresql://localhost:5432/marketing_agent`
+- Database URL: `jdbc:postgresql://localhost:5432/plinth`
 - User: `postgres`
 - Password: `secret`
 - Meta Graph version: `v25.0` (`META_GRAPH_VERSION`)

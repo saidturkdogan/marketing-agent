@@ -1,4 +1,29 @@
-import type { AuthResponse, CampaignRequest, CampaignResponse, Company, CompanyPayload } from "./types";
+import type {
+  AuthResponse,
+  CalendarData,
+  CampaignRequest,
+  CampaignResponse,
+  Company,
+  CompanyPayload,
+  Competitor,
+  ContentBrief,
+  DashboardData,
+  Opportunity,
+  StrategyData,
+} from "./types";
+
+export interface StrategyRequest {
+  companyId?: string;
+  websiteUrl?: string;
+  businessType?: string;
+  targetCountry?: string;
+  targetLanguage?: string;
+  productDescription?: string;
+  averagePrice?: string;
+  personaType?: string;
+  goal?: string;
+  competitorUrls?: string[];
+}
 
 let tokenGetter: () => Promise<string | null> = async () => null;
 
@@ -125,4 +150,96 @@ export function getCampaign(campaignId: string) {
 
 export function listCampaigns() {
   return request<CampaignResponse[]>("/api/campaigns");
+}
+
+export function analyzeWebsite(url: string) {
+  return request<Record<string, unknown>>("/api/strategy/analyze-website", {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+}
+
+export function discoverCompetitors(params: {
+  companyName: string;
+  industry: string;
+  productDescription?: string;
+  targetCountry?: string;
+}) {
+  return request<Competitor[]>("/api/strategy/discover-competitors", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function analyzeCompetitors(params: {
+  companyName: string;
+  competitorUrls: string[];
+  industry?: string;
+}) {
+  return request<Record<string, unknown>>("/api/strategy/analyze-competitors", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function findContentGaps(params: Record<string, unknown>) {
+  return request<Record<string, unknown>>("/api/strategy/content-gaps", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function discoverKeywords(params: {
+  companyName: string;
+  industry: string;
+  goal: string;
+  targetAudience?: string;
+}) {
+  return request<Record<string, unknown>>("/api/strategy/discover-keywords", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function generateStrategy(req: StrategyRequest) {
+  return request<StrategyData>("/api/strategy/generate", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export function generateCalendar(params: { companyId: string; strategyId: string }) {
+  return request<CalendarData>("/api/strategy/calendar", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function generateBrief(params: {
+  companyId: string;
+  strategyId: string;
+  contentTitle: string;
+  contentType: string;
+  goal: string;
+  targetAudience: string;
+}) {
+  return request<ContentBrief>("/api/strategy/brief", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function runFullAnalysis(req: StrategyRequest) {
+  return request<StrategyData>("/api/strategy/full-analysis", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export function getStrategy(strategyId: string) {
+  return request<StrategyData>(`/api/strategy/${strategyId}`);
+}
+
+export function getDashboard(companyId: string) {
+  return request<DashboardData>(`/api/dashboard/${companyId}`);
 }

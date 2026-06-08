@@ -1,0 +1,49 @@
+package com.plinth.agent;
+
+import com.plinth.domain.CampaignState;
+import com.plinth.llm.LlmService;
+import com.plinth.prompt.PromptCatalog;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+@Component
+public class PlannerStep implements AgentStep {
+
+    private final LlmService llmService;
+    private final PromptCatalog prompts;
+
+    public PlannerStep(LlmService llmService, PromptCatalog prompts) {
+        this.llmService = llmService;
+        this.prompts = prompts;
+    }
+
+    @Override
+    public String name() {
+        return "Planner";
+    }
+
+    @Override
+    public int order() {
+        return 10;
+    }
+
+    @Override
+    public void execute(CampaignState state) {
+        String planDraft = llmService.generate(
+                prompts.planner(),
+                "Company context:\n" + state.getCompanyContext()
+                        + "\n\nTopic: " + state.getTopic()
+                        + "\nPlatforms: " + state.getPlatforms()
+                        + "\nOutputs: " + state.getOutputs()
+        );
+        state.putPlan("campaign_title", "Campaign: " + state.getTopic());
+        state.putPlan("goal", "Generate platform-ready content assets");
+        state.putPlan("company", state.getCompanySnapshot());
+        state.putPlan("target_platforms", state.getPlatforms());
+        state.putPlan("requested_outputs", state.getOutputs());
+        state.putPlan("draft", planDraft);
+        state.putPlan("execution_queue", List.of("Researcher", "Strategist", "SocialWriters", "Reviewer", "Analytics"));
+        state.completeStep(name());
+    }
+}

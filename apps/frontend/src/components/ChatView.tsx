@@ -80,7 +80,7 @@ export function ChatView({ companyId }: Props) {
       {/* Header */}
       <div className="border-b border-slate-100 px-6 py-4">
         <h2 className="text-sm font-semibold text-slate-700">
-          Marketing AI Chat
+          Plinth AI Chat
         </h2>
         <p className="text-xs text-slate-400">
           AI automatically selects and runs tools (SEO, Trends, Platform Specs,

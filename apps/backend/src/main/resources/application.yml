@@ -3,9 +3,9 @@ server:
 
 spring:
   application:
-    name: marketing-api
+    name: plinth-api
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/marketing_agent}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/plinth}
     username: ${DATABASE_USER:postgres}
     password: ${DATABASE_PASSWORD:secret}
   jpa:

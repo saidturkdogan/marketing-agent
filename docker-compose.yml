@@ -1,9 +1,9 @@
 services:
   db:
     image: ankane/pgvector:latest
-    container_name: marketing-agent-db
+    container_name: plinth-db
     environment:
-      POSTGRES_DB: marketing_agent
+      POSTGRES_DB: plinth
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: secret
     ports:
@@ -11,7 +11,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d marketing_agent"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d plinth"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,9 +20,9 @@ services:
     build:
       context: ./apps/backend
       dockerfile: Dockerfile
-    container_name: marketing-agent-backend
+    container_name: plinth-backend
     environment:
-      DATABASE_URL: jdbc:postgresql://db:5432/marketing_agent
+      DATABASE_URL: jdbc:postgresql://db:5432/plinth
       DATABASE_USER: postgres
       DATABASE_PASSWORD: secret
       CLERK_JWKS_URL: ${CLERK_JWKS_URL:-https://pleasing-earthworm-57.clerk.accounts.dev/.well-known/jwks.json}
@@ -47,7 +47,7 @@ services:
     build:
       context: ./apps/frontend
       dockerfile: Dockerfile
-    container_name: marketing-agent-frontend
+    container_name: plinth-frontend
     environment:
       VITE_BACKEND_URL: http://backend:8080
       VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-pk_test_cGxlYXNhbnQtZWFyd2lnLTU3LmNsZXJrLmFjY291bnRzLmRldiQ}

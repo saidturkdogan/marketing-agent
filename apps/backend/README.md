@@ -1,6 +1,6 @@
-# Marketing API (Spring Boot)
+# Plinth API (Spring Boot)
 
-Java-first backend foundation for the marketing agent.
+Java backend for the Plinth marketing agent.
 
 ## Run
 
@@ -11,7 +11,7 @@ mvn spring-boot:run
 
 ## Environment
 
-- `DATABASE_URL` default: `jdbc:postgresql://localhost:5432/marketing_agent`
+- `DATABASE_URL` default: `jdbc:postgresql://localhost:5432/plinth`
 - `DATABASE_USER` default: `postgres`
 - `DATABASE_PASSWORD` default: `secret`
 
