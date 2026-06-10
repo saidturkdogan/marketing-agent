@@ -28,22 +28,28 @@ public class StrategyEntity {
     @Column(name = "strategy_id", unique = true, nullable = false)
     private String strategyId;
 
-    @Column(name = "company_id", nullable = false)
+    @Column(name = "company_id", nullable = false, columnDefinition = "TEXT")
     private String companyId;
 
+    @Column(columnDefinition = "TEXT")
     private String businessType;
 
+    @Column(columnDefinition = "TEXT")
     private String targetCountry;
 
+    @Column(columnDefinition = "TEXT")
     private String targetLanguage;
 
-    @Column(columnDefinition = "text")
+    @Column(columnDefinition = "TEXT")
     private String productDescription;
 
+    @Column(columnDefinition = "TEXT")
     private String averagePrice;
 
+    @Column(columnDefinition = "TEXT")
     private String personaType;
 
+    @Column(columnDefinition = "TEXT")
     private String goal;
 
     @Column(columnDefinition = "TEXT")

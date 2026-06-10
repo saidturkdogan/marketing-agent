@@ -2,7 +2,32 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login, register } from "../api";
 import { useAuthStore } from "../stores/authStore";
-import { Sparkles } from "lucide-react";
+
+function PlinthLogo({ size = 48 }: { size?: number }) {
+  const s = size;
+  return (
+    <svg
+      width={s}
+      height={s}
+      viewBox="0 0 48 48"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id="plogologin" x1="0" y1="0" x2="48" y2="48">
+          <stop stopColor="#2563eb" />
+          <stop offset="1" stopColor="#1d4ed8" />
+        </linearGradient>
+      </defs>
+      <rect width="48" height="48" rx="12" fill="url(#plogologin)" />
+      <path
+        d="M16 12h7v24h-7zM23 12h11v14h-11zM28.5 15.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z"
+        fill="white"
+        fillRule="evenodd"
+      />
+    </svg>
+  );
+}
 
 export function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
@@ -38,21 +63,19 @@ export function LoginPage() {
       <div className="auth-card">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500">
-            <Sparkles className="h-5 w-5 text-white" />
-          </div>
+          <PlinthLogo size={42} />
           <h1 className="text-xl font-bold text-white">Plinth</h1>
         </div>
 
         <h2 className="text-2xl font-bold text-white mb-1 text-center">
           {isRegister ? "Create account" : "Welcome back"}
         </h2>
-        <p className="text-slate-400 text-sm text-center mb-8">
+        <p className="text-neutral-400 text-sm text-center mb-8">
           {isRegister ? "Start creating AI-powered marketing content" : "Sign in to your account to continue"}
         </p>
 
         {error && (
-          <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          <div className="mb-6 rounded-lg border border-red-600/30 bg-red-600/10 px-4 py-3 text-sm text-red-400">
             {error}
           </div>
         )}
@@ -60,7 +83,7 @@ export function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {isRegister && (
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Name</label>
+              <label className="block text-sm font-medium text-neutral-300 mb-1.5">Name</label>
               <input
                 type="text"
                 className="auth-input"
@@ -73,7 +96,7 @@ export function LoginPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
+            <label className="block text-sm font-medium text-neutral-300 mb-1.5">Email</label>
             <input
               type="email"
               className="auth-input"
@@ -85,7 +108,7 @@ export function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Password</label>
+            <label className="block text-sm font-medium text-neutral-300 mb-1.5">Password</label>
             <input
               type="password"
               className="auth-input"
@@ -108,7 +131,7 @@ export function LoginPage() {
               setIsRegister(!isRegister);
               setError("");
             }}
-            className="text-sm text-slate-400 hover:text-slate-200 transition-colors"
+            className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
           >
             {isRegister ? "Already have an account? Sign in" : "Don't have an account? Create one"}
           </button>

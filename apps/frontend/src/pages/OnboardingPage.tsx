@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useClerk } from "@clerk/clerk-react";
 import { useAuthStore } from "../stores/authStore";
-import { createCompany, discoverCompetitors, runFullAnalysis } from "../api";
+import { createCompany, discoverCompetitors, runFullAnalysis, aiSuggest } from "../api";
 import type { StrategyRequest } from "../api";
 import type { CompanyPayload, Competitor } from "../types";
 import {
@@ -16,6 +17,7 @@ import {
   TrendingUp,
   Heart,
   Building2,
+  LogOut,
 } from "lucide-react";
 
 const INDUSTRIES = [
@@ -28,13 +30,8 @@ const COMPANY_SIZES = [
   "1-10", "11-50", "51-200", "201-500", "501-1000", "1000+",
 ];
 
-const PERSONAS = [
-  { id: "saas-founder", label: "SaaS Founder", icon: "💻" },
-  { id: "ecommerce-owner", label: "E-commerce Store Owner", icon: "🛒" },
-  { id: "fitness-coach", label: "Fitness Coach", icon: "💪" },
-  { id: "dental-clinic", label: "Dental Clinic Owner", icon: "🦷" },
-  { id: "agency-owner", label: "Agency Owner", icon: "🎯" },
-  { id: "real-estate", label: "Real Estate Agent", icon: "🏠" },
+const PRICING_MODELS = [
+  "Subscription", "One-time", "Freemium", "Usage-based", "Per-project",
 ];
 
 const GOALS = [
@@ -65,10 +62,46 @@ const ANALYSIS_STEPS = [
 
 type Step = 0 | 1 | 2 | 3 | 4;
 
-export function OnboardingPage() {
+function PlinthLogo({ size = 48 }: { size?: number }) {
+  const s = size;
+  return (
+    <svg
+      width={s}
+      height={s}
+      viewBox="0 0 48 48"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id="plogo" x1="0" y1="0" x2="48" y2="48">
+          <stop stopColor="#2563eb" />
+          <stop offset="1" stopColor="#1d4ed8" />
+        </linearGradient>
+      </defs>
+      <rect width="48" height="48" rx="12" fill="url(#plogo)" />
+      <path
+        d="M16 12h7v24h-7zM23 12h11v14h-11zM28.5 15.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z"
+        fill="white"
+        fillRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function ClerkSignOutButton({ className, children }: { className: string; children: React.ReactNode }) {
+  const { signOut } = useClerk();
+  return (
+    <button onClick={() => signOut()} className={className}>
+      {children}
+    </button>
+  );
+}
+
+export function OnboardingPage({ clerkEnabled }: { clerkEnabled?: boolean }) {
   const navigate = useNavigate();
   const token = useAuthStore((s) => s.token);
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
+  const { signOut } = useClerk();
 
   const [step, setStep] = useState<Step>(0);
 
@@ -78,11 +111,13 @@ export function OnboardingPage() {
   const [companySize, setCompanySize] = useState("");
 
   const [productDesc, setProductDesc] = useState("");
+  const [pricingType, setPricingType] = useState("");
   const [averagePrice, setAveragePrice] = useState("");
   const [businessType, setBusinessType] = useState<"b2b" | "b2c">("b2b");
-  const [targetCountry, setTargetCountry] = useState("");
-  const [targetLanguage, setTargetLanguage] = useState("");
-  const [personaType, setPersonaType] = useState("");
+  const [targetCountries, setTargetCountries] = useState<string[]>([]);
+  const [countryInput, setCountryInput] = useState("");
+  const [worldwide, setWorldwide] = useState(false);
+  const [targetAudience, setTargetAudience] = useState("");
 
   const [competitorUrls, setCompetitorUrls] = useState<string[]>([""]);
   const [discoveredCompetitors, setDiscoveredCompetitors] = useState<Competitor[]>([]);
@@ -97,6 +132,9 @@ export function OnboardingPage() {
   const [analysisError, setAnalysisError] = useState("");
   const launchedRef = useRef(false);
 
+  const [suggesting, setSuggesting] = useState<Record<string, boolean>>({});
+  const [suggestError, setSuggestError] = useState("");
+
   useEffect(() => {
     if (!token && !isSignedIn) {
       navigate("/login", { replace: true });
@@ -109,6 +147,43 @@ export function OnboardingPage() {
 
   function goBack() {
     setStep((s) => Math.max(s - 1, 0) as Step);
+  }
+
+  function handleLogout() {
+    useAuthStore.getState().clearAuth();
+    navigate("/login", { replace: true });
+  }
+
+  async function handleAiSuggest(field: string, currentText: string, setter: (v: string) => void, context?: string) {
+    setSuggesting((s) => ({ ...s, [field]: true }));
+    try {
+      const result = await aiSuggest(field, currentText, context);
+      setter(result.suggestion);
+      setSuggestError("");
+    } catch (err) {
+      setSuggestError(err instanceof Error ? err.message : "AI suggest failed. Check backend logs.");
+    } finally {
+      setSuggesting((s) => ({ ...s, [field]: false }));
+    }
+  }
+
+  function addCountry() {
+    const c = countryInput.trim();
+    if (c && !targetCountries.includes(c)) {
+      setTargetCountries((prev) => [...prev, c]);
+      setCountryInput("");
+    }
+  }
+
+  function removeCountry(c: string) {
+    setTargetCountries((prev) => prev.filter((x) => x !== c));
+  }
+
+  function handleCountryKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addCountry();
+    }
   }
 
   function addCompetitorUrl() {
@@ -144,7 +219,7 @@ export function OnboardingPage() {
         companyName: companyName.trim(),
         industry,
         productDescription: productDesc || undefined,
-        targetCountry: targetCountry || undefined,
+        targetCountry: worldwide ? "Worldwide" : (targetCountries[0] || undefined),
       });
       setDiscoveredCompetitors(results);
       const allUrls = new Set(results.map((c) => c.url));
@@ -169,21 +244,24 @@ export function OnboardingPage() {
         websiteUrl: websiteUrl.trim() || undefined,
         industry: industry || undefined,
         description: productDesc.trim() || undefined,
-        targetAudience: personaType || undefined,
+        targetAudience: targetAudience.trim() || undefined,
         competitors: Array.from(selectedCompetitors),
       };
 
       const company = await createCompany(companyPayload);
 
+      const priceText = pricingType
+        ? `${pricingType}: ${averagePrice.trim()}`
+        : averagePrice.trim();
+
       const req: StrategyRequest = {
         companyId: company.companyId,
         websiteUrl: websiteUrl.trim() || undefined,
         businessType,
-        targetCountry: targetCountry.trim() || undefined,
-        targetLanguage: targetLanguage.trim() || undefined,
+        targetCountry: worldwide ? "Worldwide" : targetCountries.join(", "),
         productDescription: productDesc.trim() || undefined,
-        averagePrice: averagePrice.trim() || undefined,
-        personaType: personaType || undefined,
+        averagePrice: priceText || undefined,
+        personaType: targetAudience.trim() || undefined,
         goal: selectedGoal,
         competitorUrls: Array.from(selectedCompetitors),
       };
@@ -210,7 +288,7 @@ export function OnboardingPage() {
   }
 
   const isStep0Valid = companyName.trim() && websiteUrl.trim() && industry;
-  const isStep1Valid = productDesc.trim() && targetCountry.trim();
+  const isStep1Valid = productDesc.trim() && (worldwide || targetCountries.length > 0) && targetAudience.trim();
   const hasAtLeastOneCompetitor = selectedCompetitors.size > 0;
   const isStep2Valid = hasAtLeastOneCompetitor;
   const isStep3Valid = selectedGoal !== "";
@@ -220,23 +298,21 @@ export function OnboardingPage() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#06060e]">
       {/* Sidebar */}
-      <div className="hidden lg:flex w-[380px] flex-col justify-between p-10 bg-gradient-to-br from-[#080814] to-[#030308] border-r border-[#111122]">
+      <div className="hidden lg:flex w-[440px] flex-col justify-between p-12 bg-gradient-to-br from-[#080814] to-[#030308] border-r border-[#111122]">
         <div>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-700">
-              <Sparkles className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-2xl font-bold text-white">Plinth</span>
+          <div className="flex items-center gap-4 mb-10">
+            <PlinthLogo size={52} />
+            <span className="text-3xl font-bold text-white">Plinth</span>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-4">
+          <h2 className="text-3xl font-bold text-white mb-5">
             AI-powered marketing strategy
           </h2>
-          <p className="text-neutral-400 text-sm leading-relaxed">
+          <p className="text-neutral-400 text-base leading-relaxed">
             Research, analyze, decide — automatically. Our AI agents scan your market,
             analyze competitors, find content gaps, and build a complete strategy
             tailored to your business.
           </p>
-          <div className="mt-8 space-y-3">
+          <div className="mt-10 space-y-4">
             {[
               "Competitor analysis & positioning",
               "Content gap discovery",
@@ -245,21 +321,35 @@ export function OnboardingPage() {
               "AI-generated content briefs",
             ].map((text) => (
               <div key={text} className="flex items-center gap-3">
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600/30 flex-shrink-0">
-                  <Check className="h-3 w-3 text-emerald-300" />
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600/30 flex-shrink-0">
+                  <Check className="h-3.5 w-3.5 text-emerald-300" />
                 </div>
-                <span className="text-xs text-neutral-400">{text}</span>
+                <span className="text-sm text-neutral-400">{text}</span>
               </div>
             ))}
           </div>
         </div>
 
         <div>
+          {clerkEnabled ? (
+            <ClerkSignOutButton className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-neutral-500 hover:text-red-400 hover:bg-[#111122] transition-colors mb-4">
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </ClerkSignOutButton>
+          ) : (
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-neutral-500 hover:text-red-400 hover:bg-[#111122] transition-colors mb-4"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          )}
           <div className="flex items-center gap-3 mb-2">
-            <div className="flex h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="text-xs text-neutral-500">{STEP_LABELS[step]}</span>
+            <div className="flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            <span className="text-sm text-neutral-500 font-medium">{STEP_LABELS[step]}</span>
           </div>
-          <div className="h-1 rounded-full bg-[#111122] overflow-hidden">
+          <div className="h-1.5 rounded-full bg-[#111122] overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-blue-600 to-emerald-600 transition-all duration-500"
               style={{ width: `${((step + 1) / 5) * 100}%` }}
@@ -269,11 +359,11 @@ export function OnboardingPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
-        <div className="w-full max-w-lg">
+      <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
+        <div className="w-full max-w-2xl">
           {/* Step indicator - top */}
-          <div className="mb-10">
-            <div className="flex items-center gap-1">
+          <div className="mb-12">
+            <div className="flex items-center gap-2">
               {STEP_LABELS.map((label, i) => {
                 const isCurrent = i === step;
                 const isDone = i < step;
@@ -281,7 +371,7 @@ export function OnboardingPage() {
                 return (
                   <div key={i} className="flex items-center flex-1 last:flex-[0_0_auto]">
                     <div
-                      className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all ${
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all ${
                         isCurrent
                           ? "bg-blue-700/30 text-blue-300"
                           : isDone
@@ -290,7 +380,7 @@ export function OnboardingPage() {
                       }`}
                     >
                       <div
-                        className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold flex-shrink-0 ${
+                        className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold flex-shrink-0 ${
                           isCurrent
                             ? "bg-blue-600 text-white"
                             : isDone
@@ -299,19 +389,19 @@ export function OnboardingPage() {
                         }`}
                       >
                         {isDone ? (
-                          <Check className="h-3 w-3" />
+                          <Check className="h-3.5 w-3.5" />
                         ) : (
                           i + 1
                         )}
                       </div>
-                      <span className={`text-xs font-medium whitespace-nowrap hidden xl:inline ${
+                      <span className={`text-sm font-medium whitespace-nowrap hidden sm:inline ${
                         isCurrent ? "text-blue-300" : isDone ? "text-emerald-300" : "text-neutral-600"
                       }`}>
                         {label}
                       </span>
                     </div>
                     {!isLast && (
-                      <div className={`h-px flex-1 mx-1 ${
+                      <div className={`h-px flex-1 mx-2 ${
                         i < step ? "bg-emerald-600/40" : "bg-[#1a1a2e]"
                       }`} />
                     )}
@@ -324,21 +414,42 @@ export function OnboardingPage() {
           {/* Mobile header */}
           <div className="lg:hidden flex items-center justify-between mb-8">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-700">
-                <Sparkles className="h-4 w-4 text-white" />
-              </div>
+              <PlinthLogo size={34} />
               <span className="text-base font-semibold text-white">Plinth</span>
             </div>
-            <span className="text-xs text-neutral-500">Step {step + 1}/5</span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-neutral-500">Step {step + 1}/5</span>
+              {clerkEnabled ? (
+                <ClerkSignOutButton
+                  className="text-neutral-500 hover:text-red-400 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                </ClerkSignOutButton>
+              ) : (
+                <button
+                  onClick={handleLogout}
+                  className="text-neutral-500 hover:text-red-400 transition-colors"
+                  title="Sign out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
+
+          {suggestError && (
+            <p className="text-red-400 text-sm mb-4 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              {suggestError}
+            </p>
+          )}
 
           {/* Step 0: Welcome */}
           {step === 0 && (
             <div className="animate-fadeIn">
-              <h1 className="text-3xl font-bold text-white mb-2">
+              <h1 className="text-4xl font-bold text-white mb-3">
                 Build your marketing strategy in 10 minutes.
               </h1>
-              <p className="text-neutral-400 mb-8">
+              <p className="text-neutral-400 text-base mb-10">
                 Tell us about your company and we'll handle the rest.
               </p>
 
@@ -365,7 +476,8 @@ export function OnboardingPage() {
                     <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
                     <input
                       type="url"
-                      className="auth-input pl-10"
+                      className="auth-input"
+                      style={{ paddingLeft: "2.5rem" }}
                       placeholder="https://example.com"
                       value={websiteUrl}
                       onChange={(e) => setWebsiteUrl(e.target.value)}
@@ -419,21 +531,35 @@ export function OnboardingPage() {
           {/* Step 1: Business Context */}
           {step === 1 && (
             <div className="animate-fadeIn">
-              <h2 className="text-2xl font-bold text-white mb-1">
+              <h2 className="text-3xl font-bold text-white mb-2">
                 Tell us about your business
               </h2>
-              <p className="text-neutral-400 text-sm mb-8">
+              <p className="text-neutral-400 text-base mb-10">
                 The more we know, the better your strategy will be.
               </p>
 
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-neutral-300 mb-1.5">
-                    What do you sell?
-                  </label>
+                  <div className="flex items-end gap-2 mb-1.5">
+                    <label className="block text-sm font-medium text-neutral-300">
+                      What do you sell?
+                    </label>
+                    <button
+                      onClick={() => handleAiSuggest("productDesc", productDesc, setProductDesc)}
+                      disabled={suggesting["productDesc"] || !productDesc.trim()}
+                      className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors ml-auto mb-0.5"
+                    >
+                      {suggesting["productDesc"] ? (
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      AI suggest
+                    </button>
+                  </div>
                   <textarea
-                    className="auth-input min-h-[80px] resize-none"
-                    placeholder="Describe your product or service..."
+                    className="auth-input min-h-[120px] resize-y"
+                    placeholder="Describe your product or service in detail — what makes it unique, who it helps, and why customers choose it..."
                     value={productDesc}
                     onChange={(e) => setProductDesc(e.target.value)}
                   />
@@ -441,12 +567,47 @@ export function OnboardingPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-neutral-300 mb-1.5">
-                    Average product price?
+                    Pricing model
                   </label>
+                  <div className="flex flex-wrap gap-2">
+                    {PRICING_MODELS.map((pm) => (
+                      <button
+                        key={pm}
+                        onClick={() => setPricingType(pricingType === pm ? "" : pm)}
+                        className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
+                          pricingType === pm
+                            ? "border-blue-600 bg-blue-700/10 text-blue-300"
+                            : "border-[#1a1a2e] text-neutral-400 hover:border-[#252545] hover:text-neutral-300"
+                        }`}
+                      >
+                        {pm}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-end gap-2 mb-1.5">
+                    <label className="block text-sm font-medium text-neutral-300">
+                      Average product price?
+                    </label>
+                    <button
+                      onClick={() => handleAiSuggest("averagePrice", averagePrice, setAveragePrice, `Pricing model: ${pricingType || "unknown"}`)}
+                      disabled={suggesting["averagePrice"] || !averagePrice.trim()}
+                      className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors ml-auto mb-0.5"
+                    >
+                      {suggesting["averagePrice"] ? (
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      AI suggest
+                    </button>
+                  </div>
                   <input
                     type="text"
                     className="auth-input"
-                    placeholder="e.g. $49/month"
+                    placeholder={pricingType === "Subscription" ? "e.g. $49/month" : pricingType === "One-time" ? "e.g. $299" : "e.g. $49/month"}
                     value={averagePrice}
                     onChange={(e) => setAveragePrice(e.target.value)}
                   />
@@ -463,8 +624,8 @@ export function OnboardingPage() {
                         onClick={() => setBusinessType(type)}
                         className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border text-sm font-medium transition-all ${
                           businessType === type
-                            ? "border-blue-500 bg-blue-600/10 text-blue-400"
-                            : "border-slate-800 text-slate-400 hover:border-slate-700"
+                            ? "border-blue-600 bg-blue-700/10 text-blue-300"
+                            : "border-[#1a1a2e] text-neutral-400 hover:border-[#252545]"
                         }`}
                       >
                         <Building2 className="h-4 w-4" />
@@ -474,55 +635,88 @@ export function OnboardingPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-300 mb-1.5">
-                      Target country?
-                    </label>
-                    <input
-                      type="text"
-                      className="auth-input"
-                      placeholder="e.g. United States"
-                      value={targetCountry}
-                      onChange={(e) => setTargetCountry(e.target.value)}
-                    />
+                <div>
+                  <label className="block text-sm font-medium text-neutral-300 mb-1.5">
+                    Target countries
+                  </label>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="relative flex-1">
+                      <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+                      <input
+                        type="text"
+                        className="auth-input"
+                        style={{ paddingLeft: "2.5rem" }}
+                        placeholder="Type a country and press Enter..."
+                        value={countryInput}
+                        onChange={(e) => setCountryInput(e.target.value)}
+                        onKeyDown={handleCountryKeyDown}
+                        disabled={worldwide}
+                      />
+                    </div>
+                    <button
+                      onClick={addCountry}
+                      disabled={worldwide || !countryInput.trim()}
+                      className="px-4 py-3 rounded-lg bg-blue-700 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Add
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-300 mb-1.5">
-                      Target language?
-                    </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
-                      type="text"
-                      className="auth-input"
-                      placeholder="e.g. English"
-                      value={targetLanguage}
-                      onChange={(e) => setTargetLanguage(e.target.value)}
+                      type="checkbox"
+                      checked={worldwide}
+                      onChange={(e) => {
+                        setWorldwide(e.target.checked);
+                        if (e.target.checked) setTargetCountries([]);
+                      }}
+                      className="h-4 w-4 rounded border-[#1a1a2e] bg-[#080814] text-blue-600 focus:ring-blue-600"
                     />
-                  </div>
+                    <span className="text-sm text-neutral-400">Worldwide (all countries)</span>
+                  </label>
+                  {targetCountries.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {targetCountries.map((c) => (
+                        <span
+                          key={c}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111122] border border-[#1a1a2e] text-sm text-neutral-300"
+                        >
+                          {c}
+                          <button
+                            onClick={() => removeCountry(c)}
+                            className="text-neutral-500 hover:text-red-400 transition-colors"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-300 mb-2">
-                    Who is your target customer?
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {PERSONAS.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => setPersonaType(personaType === p.id ? "" : p.id)}
-                        className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
-                          personaType === p.id
-                            ? "border-blue-600 bg-blue-700/10"
-                            : "border-[#1a1a2e] hover:border-[#252545]"
-                        }`}
-                      >
-                        <span className="text-xl">{p.icon}</span>
-                        <span className={`text-sm ${personaType === p.id ? "text-blue-300" : "text-neutral-300"}`}>
-                          {p.label}
-                        </span>
-                      </button>
-                    ))}
+                  <div className="flex items-end gap-2 mb-1.5">
+                    <label className="block text-sm font-medium text-neutral-300">
+                      Who is your target customer?
+                    </label>
+                    <button
+                      onClick={() => handleAiSuggest("targetAudience", targetAudience, setTargetAudience, `Product: ${productDesc || "unknown"}`)}
+                      disabled={suggesting["targetAudience"] || !targetAudience.trim()}
+                      className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors ml-auto mb-0.5"
+                    >
+                      {suggesting["targetAudience"] ? (
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      AI suggest
+                    </button>
                   </div>
+                  <textarea
+                    className="auth-input min-h-[80px] resize-y"
+                    placeholder="Describe your ideal customer — their demographics, interests, pain points, and what motivates them to buy..."
+                    value={targetAudience}
+                    onChange={(e) => setTargetAudience(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -547,10 +741,10 @@ export function OnboardingPage() {
           {/* Step 2: Competitor Discovery */}
           {step === 2 && (
             <div className="animate-fadeIn">
-              <h2 className="text-2xl font-bold text-white mb-1">
+              <h2 className="text-3xl font-bold text-white mb-2">
                 Who are your competitors?
               </h2>
-              <p className="text-neutral-400 text-sm mb-8">
+              <p className="text-neutral-400 text-base mb-10">
                 Enter competitor websites or let us find them for you.
               </p>
 
@@ -692,10 +886,10 @@ export function OnboardingPage() {
           {/* Step 3: Goal Selection */}
           {step === 3 && (
             <div className="animate-fadeIn">
-              <h2 className="text-2xl font-bold text-white mb-1">
+              <h2 className="text-3xl font-bold text-white mb-2">
                 What's your primary goal?
               </h2>
-              <p className="text-neutral-400 text-sm mb-8">
+              <p className="text-neutral-400 text-base mb-10">
                 Your strategy will be built around this.
               </p>
 
@@ -783,10 +977,10 @@ export function OnboardingPage() {
                     )}
                   </div>
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-2">
+                <h2 className="text-3xl font-bold text-white mb-2">
                   {analysisComplete ? "Analysis complete!" : "Analyzing your market..."}
                 </h2>
-                <p className="text-neutral-400 text-sm">
+                <p className="text-neutral-400 text-base">
                   {analysisComplete
                     ? "Redirecting to your dashboard..."
                     : "Our AI agents are working through the data"}

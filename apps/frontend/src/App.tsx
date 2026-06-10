@@ -25,7 +25,14 @@ function ClerkApp() {
   const syncedRef = useRef(false);
 
   useEffect(() => {
-    setTokenGetter(async () => (isSignedIn ? (getToken() ?? null) : null));
+    setTokenGetter(async () => {
+      if (!isSignedIn) return null;
+      const t = await getToken();
+      if (!t) {
+        console.warn("[auth] Clerk getToken() returned null despite isSignedIn=true");
+      }
+      return t ?? null;
+    });
   }, [isSignedIn, getToken]);
 
   useEffect(() => {
@@ -36,12 +43,15 @@ function ClerkApp() {
       setAuth("clerk", email, name, user.id);
       syncClerkUser(user.id, email, name).catch(() => {});
     }
-    if (!isSignedIn) syncedRef.current = false;
+    if (!isSignedIn) {
+      syncedRef.current = false;
+      useAuthStore.getState().clearAuth();
+    }
   }, [isSignedIn, user, setAuth]);
 
   if (!isLoaded) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-950">
+      <div className="flex h-screen w-screen items-center justify-center bg-[#06060e]">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
       </div>
     );
@@ -51,7 +61,7 @@ function ClerkApp() {
     <Routes>
       <Route path="/login" element={isSignedIn ? <Navigate to="/onboarding" replace /> : <ClerkAuthPage />} />
       <Route path="/chat/:conversationId?" element={isSignedIn ? <ChatLayout /> : <Navigate to="/login" replace />} />
-      <Route path="/onboarding" element={isSignedIn ? <OnboardingPage /> : <Navigate to="/login" replace />} />
+      <Route path="/onboarding" element={isSignedIn ? <OnboardingPage clerkEnabled /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/:companyId" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to={isSignedIn ? "/onboarding" : "/login"} replace />} />
     </Routes>

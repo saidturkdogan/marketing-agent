@@ -28,7 +28,7 @@ public class SpringAiCompatibleLlmService implements LlmService {
 
     public SpringAiCompatibleLlmService(ObjectMapper objectMapper,
                                         @Value("${app.llm.google-api-key:}") String apiKey,
-                                        @Value("${app.llm.google-model:gemini-2.0-flash}") String model) {
+                                        @Value("${app.llm.google-model:gemini-2.5-flash}") String model) {
         var requestFactory = new JdkClientHttpRequestFactory();
         requestFactory.setReadTimeout(REQUEST_TIMEOUT);
 

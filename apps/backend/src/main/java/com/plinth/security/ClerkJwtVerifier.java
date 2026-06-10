@@ -56,7 +56,11 @@ public class ClerkJwtVerifier {
             throw new IllegalArgumentException("Token missing 'kid' header");
         }
 
-        var publicKey = keyCache.computeIfAbsent(keyId, this::fetchKey);
+        refreshKeyCache();
+        var publicKey = keyCache.get(keyId);
+        if (publicKey == null) {
+            throw new IllegalStateException("Key not found in Clerk JWKS: " + keyId);
+        }
 
         return Jwts.parser()
                 .verifyWith(publicKey)
@@ -64,15 +68,6 @@ public class ClerkJwtVerifier {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-    }
-
-    private PublicKey fetchKey(String keyId) {
-        refreshKeyCache();
-        var key = keyCache.get(keyId);
-        if (key == null) {
-            throw new IllegalStateException("Key not found in Clerk JWKS: " + keyId);
-        }
-        return key;
     }
 
     private void refreshKeyCache() {

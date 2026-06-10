@@ -3,6 +3,7 @@ package com.plinth.controller;
 import com.plinth.dto.request.StrategyRequest;
 import com.plinth.dto.response.DashboardResponse;
 import com.plinth.dto.response.StrategyResponse;
+import com.plinth.llm.LlmService;
 import com.plinth.service.StrategyService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -23,9 +24,11 @@ import java.util.Map;
 public class StrategyController {
 
     private final StrategyService strategyService;
+    private final LlmService llmService;
 
-    public StrategyController(StrategyService strategyService) {
+    public StrategyController(StrategyService strategyService, LlmService llmService) {
         this.strategyService = strategyService;
+        this.llmService = llmService;
     }
 
     @PostMapping("/analyze-website")
@@ -120,6 +123,28 @@ public class StrategyController {
     @GetMapping("/dashboard/{companyId}")
     public DashboardResponse getDashboard(@PathVariable String companyId) {
         return strategyService.getDashboard(companyId);
+    }
+
+    @PostMapping("/ai-suggest")
+    public Map<String, String> aiSuggest(@RequestBody Map<String, String> body) {
+        String fieldName = body.getOrDefault("field", "");
+        String currentText = body.getOrDefault("currentText", "");
+        String context = body.getOrDefault("context", "");
+
+        String systemPrompt = """
+                You are a helpful marketing strategy assistant. Your task is to enhance and expand the user's draft text
+                for a marketing onboarding form. Make the text more detailed, professional, and compelling while
+                staying true to the user's intent. Return ONLY the enhanced plain text, nothing else.
+                Do NOT use markdown formatting like **bold** or *italic*. Output raw text only.
+                """;
+
+        String userPrompt = String.format(
+                "Field: %s\nCurrent text: %s\nAdditional context: %s\n\nPlease enhance the text above.",
+                fieldName, currentText, context
+        );
+
+        String suggestion = llmService.generate(systemPrompt, userPrompt);
+        return Map.of("suggestion", suggestion != null ? suggestion.trim() : currentText);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

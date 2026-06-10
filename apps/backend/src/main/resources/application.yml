@@ -24,6 +24,10 @@ management:
       exposure:
         include: health,info
 
+logging:
+  level:
+    com.plinth.security: DEBUG
+
 app:
   clerk:
     jwks-url: ${CLERK_JWKS_URL:}
@@ -38,7 +42,7 @@ app:
       ig-user-id: ${INSTAGRAM_IG_USER_ID:}
   llm:
     google-api-key: ${GOOGLE_API_KEY:}
-    google-model: ${GOOGLE_MODEL:gemini-2.0-flash}
+    google-model: ${GOOGLE_MODEL:gemini-2.5-flash}
   embedding:
     api-key: ${EMBEDDING_API_KEY:sk-mia_a68837_R-g4EagJ4ruwW9xKO48DlESDtxneIZHliroZ5LvrgBR_SzwU_loUj9eII9_syo6L}
     model: ${EMBEDDING_MODEL:qwen3-embedding-8b}

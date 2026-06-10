@@ -32,24 +32,34 @@ export function setTokenGetter(fn: () => Promise<string | null>) {
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const token = await tokenGetter();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options?.headers as Record<string, string> | undefined),
-  };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  async function doRequest(token: string | null): Promise<Response> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(options?.headers as Record<string, string> | undefined),
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    } else {
+      console.warn(`[api] No token available for ${options?.method || "GET"} ${url}`);
+    }
+    return fetch(url, { ...options, headers });
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  let token = await tokenGetter();
+  let response = await doRequest(token);
+
+  if (response.status === 403) {
+    console.warn(`[api] 403 on ${options?.method || "GET"} ${url}, retrying with fresh token...`);
+    await new Promise((r) => setTimeout(r, 500));
+    token = await tokenGetter();
+    response = await doRequest(token);
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || `Request failed with ${response.status}`);
+    const msg = error.error || `Request failed with ${response.status}`;
+    console.error(`[api] ${response.status} on ${options?.method || "GET"} ${url}: ${msg}`);
+    throw new Error(msg);
   }
 
   return response.json() as Promise<T>;
@@ -202,14 +212,14 @@ export function discoverKeywords(params: {
 }
 
 export function generateStrategy(req: StrategyRequest) {
-  return request<StrategyData>("/api/strategy/generate", {
+  return request<StrategyData>("/api/strategy/generate-strategy", {
     method: "POST",
     body: JSON.stringify(req),
   });
 }
 
 export function generateCalendar(params: { companyId: string; strategyId: string }) {
-  return request<CalendarData>("/api/strategy/calendar", {
+  return request<CalendarData>("/api/strategy/generate-calendar", {
     method: "POST",
     body: JSON.stringify(params),
   });
@@ -223,14 +233,14 @@ export function generateBrief(params: {
   goal: string;
   targetAudience: string;
 }) {
-  return request<ContentBrief>("/api/strategy/brief", {
+  return request<ContentBrief>("/api/strategy/generate-brief", {
     method: "POST",
     body: JSON.stringify(params),
   });
 }
 
 export function runFullAnalysis(req: StrategyRequest) {
-  return request<StrategyData>("/api/strategy/full-analysis", {
+  return request<StrategyData>("/api/strategy/run-full", {
     method: "POST",
     body: JSON.stringify(req),
   });
@@ -242,4 +252,11 @@ export function getStrategy(strategyId: string) {
 
 export function getDashboard(companyId: string) {
   return request<DashboardData>(`/api/dashboard/${companyId}`);
+}
+
+export function aiSuggest(field: string, currentText: string, context?: string) {
+  return request<{ suggestion: string }>("/api/strategy/ai-suggest", {
+    method: "POST",
+    body: JSON.stringify({ field, currentText, context: context || "" }),
+  });
 }

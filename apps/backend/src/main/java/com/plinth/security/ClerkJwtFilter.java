@@ -61,9 +61,16 @@ public class ClerkJwtFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(
                         new UsernamePasswordAuthenticationToken(
                                 new AppUserDetails(user), null, Collections.emptyList()));
+                log.debug("Clerk JWT verified for user: {}", clerkUserId);
             } catch (Exception ex) {
-                log.warn("Clerk JWT verification failed: {}", ex.getMessage());
+                log.warn("Clerk JWT verification failed for {} {} - type: {}, message: {}",
+                        request.getMethod(), request.getRequestURI(),
+                        ex.getClass().getSimpleName(), ex.getMessage());
             }
+        } else if (header == null) {
+            log.debug("No Authorization header on {} {}", request.getMethod(), request.getRequestURI());
+        } else {
+            log.debug("Non-Bearer Authorization header on {} {}", request.getMethod(), request.getRequestURI());
         }
 
         chain.doFilter(request, response);
