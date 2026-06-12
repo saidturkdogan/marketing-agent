@@ -3,6 +3,7 @@ package com.plinth.agent;
 import com.plinth.domain.CampaignState;
 import com.plinth.llm.LlmService;
 import com.plinth.prompt.PromptCatalog;
+import com.plinth.service.AgentIdentityService;
 import com.plinth.tool.PlatformToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,11 +27,13 @@ public class SocialWritersStep implements AgentStep {
     private final LlmService llmService;
     private final PromptCatalog prompts;
     private final PlatformToolService platformToolService;
+    private final AgentIdentityService identityService;
 
-    public SocialWritersStep(LlmService llmService, PromptCatalog prompts, PlatformToolService platformToolService) {
+    public SocialWritersStep(LlmService llmService, PromptCatalog prompts, PlatformToolService platformToolService, AgentIdentityService identityService) {
         this.llmService = llmService;
         this.prompts = prompts;
         this.platformToolService = platformToolService;
+        this.identityService = identityService;
     }
 
     @Override
@@ -96,6 +99,7 @@ public class SocialWritersStep implements AgentStep {
         @Override
         public SocialWriterResult call() {
             try {
+                String identityContext = identityService.buildIdentityContext(state.getCompanyProfile());
                 Map<String, Object> specs = platformToolService.specs(platform);
                 String promptInput = "Company context:\n" + state.getCompanyContext()
                         + "\n\nTopic: " + state.getTopic()
@@ -103,11 +107,13 @@ public class SocialWritersStep implements AgentStep {
                         + "\nSpecs: " + specs
                         + "\n\nHard requirements:"
                         + "\n- Make the copy specific to " + state.getCompanyProfile().name() + "."
-                        + "\n- Reflect the target audience, brand voice, value proposition, and products/services from company context."
+                        + "\n- Reflect the target audience, brand voice scale dimensions, value proposition, and products/services from company context."
+                        + "\n- Use competitor intelligence to position our advantages."
+                        + "\n- NEVER use any banned words from the brand identity."
                         + "\n- If a website URL is available, use it as the CTA/link destination."
                         + "\n- If a logo URL is available, mention it in visual or execution notes.";
-                String draftA = llmService.generate(prompts.socialWriter(platform), promptInput + "\nCreate variant A.");
-                String draftB = llmService.generate(prompts.socialWriter(platform), promptInput + "\nCreate variant B.");
+                String draftA = llmService.generate(prompts.socialWriter(platform, identityContext), promptInput + "\nCreate variant A.");
+                String draftB = llmService.generate(prompts.socialWriter(platform, identityContext), promptInput + "\nCreate variant B.");
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("company_context", state.getCompanySnapshot());
                 payload.put("variant_a", draftA);

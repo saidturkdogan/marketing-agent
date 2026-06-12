@@ -46,7 +46,8 @@ class CampaignWorkflowRunnerTest {
     void shouldExecuteAllStepsAndComplete() {
         CompanyProfile profile = new CompanyProfile(
                 "c1", "TestCo", null, null, "Tech", "desc",
-                "audience", "voice", "vp", List.of(), List.of(), null
+                "audience", "voice", "vp", List.of(), List.of(), null,
+                null, null, null, null, null
         );
         CampaignState state = new CampaignState("camp-1", profile, "Topic", List.of("LinkedIn"), List.of("social"));
 
@@ -80,7 +81,8 @@ class CampaignWorkflowRunnerTest {
         CampaignWorkflowRunner runner = new CampaignWorkflowRunner(List.of(step1, failingStep));
         CompanyProfile profile = new CompanyProfile(
                 "c1", "TestCo", null, null, "Tech", "desc",
-                "audience", "voice", "vp", List.of(), List.of(), null
+                "audience", "voice", "vp", List.of(), List.of(), null,
+                null, null, null, null, null
         );
         CampaignState state = new CampaignState("camp-1", profile, "Topic", List.of("LinkedIn"), List.of("social"));
 
@@ -103,7 +105,8 @@ class CampaignWorkflowRunnerTest {
         CampaignWorkflowRunner runner = new CampaignWorkflowRunner(List.of(criticalFailing));
         CompanyProfile profile = new CompanyProfile(
                 "c1", "TestCo", null, null, "Tech", "desc",
-                "audience", "voice", "vp", List.of(), List.of(), null
+                "audience", "voice", "vp", List.of(), List.of(), null,
+                null, null, null, null, null
         );
         CampaignState state = new CampaignState("camp-1", profile, "Topic", List.of("LinkedIn"), List.of("social"));
 

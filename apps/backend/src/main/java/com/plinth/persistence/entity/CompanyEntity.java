@@ -1,5 +1,6 @@
 package com.plinth.persistence.entity;
 
+import com.plinth.persistence.converter.ListMapJsonConverter;
 import com.plinth.persistence.converter.MapJsonConverter;
 import com.plinth.persistence.converter.StringListJsonConverter;
 import jakarta.persistence.Column;
@@ -63,6 +64,24 @@ public class CompanyEntity {
     @Column(name = "social_links", columnDefinition = "text")
     private Map<String, Object> socialLinks;
 
+    @Column(name = "product_name", length = 500)
+    private String productName;
+
+    @Column(name = "core_value_prop", columnDefinition = "text")
+    private String coreValueProp;
+
+    @Convert(converter = StringListJsonConverter.class)
+    @Column(name = "banned_words", columnDefinition = "text")
+    private List<String> bannedWords;
+
+    @Convert(converter = MapJsonConverter.class)
+    @Column(name = "brand_voice_scale", columnDefinition = "text")
+    private Map<String, Object> brandVoiceScale;
+
+    @Convert(converter = ListMapJsonConverter.class)
+    @Column(name = "competitors_detail", columnDefinition = "text")
+    private List<Map<String, Object>> competitorsDetail;
+
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
@@ -111,6 +130,16 @@ public class CompanyEntity {
     public void setSocialLinks(Map<String, Object> socialLinks) { this.socialLinks = socialLinks; }
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
+    public String getProductName() { return productName; }
+    public void setProductName(String productName) { this.productName = productName; }
+    public String getCoreValueProp() { return coreValueProp; }
+    public void setCoreValueProp(String coreValueProp) { this.coreValueProp = coreValueProp; }
+    public List<String> getBannedWords() { return bannedWords; }
+    public void setBannedWords(List<String> bannedWords) { this.bannedWords = bannedWords; }
+    public Map<String, Object> getBrandVoiceScale() { return brandVoiceScale; }
+    public void setBrandVoiceScale(Map<String, Object> brandVoiceScale) { this.brandVoiceScale = brandVoiceScale; }
+    public List<Map<String, Object>> getCompetitorsDetail() { return competitorsDetail; }
+    public void setCompetitorsDetail(List<Map<String, Object>> competitorsDetail) { this.competitorsDetail = competitorsDetail; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
 }

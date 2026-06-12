@@ -3,6 +3,7 @@ package com.plinth.agent;
 import com.plinth.domain.CampaignState;
 import com.plinth.llm.LlmService;
 import com.plinth.prompt.PromptCatalog;
+import com.plinth.service.AgentIdentityService;
 import com.plinth.tool.PolicyToolService;
 import org.springframework.stereotype.Component;
 
@@ -14,11 +15,13 @@ public class ReviewerStep implements AgentStep {
     private final LlmService llmService;
     private final PromptCatalog prompts;
     private final PolicyToolService policyToolService;
+    private final AgentIdentityService identityService;
 
-    public ReviewerStep(LlmService llmService, PromptCatalog prompts, PolicyToolService policyToolService) {
+    public ReviewerStep(LlmService llmService, PromptCatalog prompts, PolicyToolService policyToolService, AgentIdentityService identityService) {
         this.llmService = llmService;
         this.prompts = prompts;
         this.policyToolService = policyToolService;
+        this.identityService = identityService;
     }
 
     @Override
@@ -37,14 +40,15 @@ public class ReviewerStep implements AgentStep {
         String policyResult = policyToolService.check(assetsText);
         boolean policyPassed = "pass".equals(policyResult);
 
+        String identityContext = identityService.buildIdentityContext(state.getCompanyProfile());
         String verdict = llmService.generate(
-                prompts.reviewer(),
+                prompts.reviewer(identityContext),
                 "Campaign topic: " + state.getTopic()
                         + "\nCompany: " + state.getCompanyProfile().name()
                         + "\nAssets: " + assetsText
                         + "\n\nPolicy check result: " + policyResult
                         + (policyPassed
-                                ? "\nPolicy check passed. Review for strategic consistency, platform fit, clarity, and completeness."
+                                ? "\nPolicy check passed. Review for strategic consistency, platform fit, clarity, and completeness. Check that brand voice scale is respected and no banned words are used."
                                 : "\nPolicy check found issues. Review the flagged content and suggest specific rewrites.")
         );
 

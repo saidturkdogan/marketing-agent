@@ -78,6 +78,11 @@ public class CompanyService {
         company.setProductsOrServices(request.productsOrServices() == null ? List.of() : request.productsOrServices());
         company.setCompetitors(request.competitors() == null ? List.of() : request.competitors());
         company.setSocialLinks(request.socialLinks() == null ? Map.of() : request.socialLinks());
+        company.setProductName(request.productName());
+        company.setCoreValueProp(request.coreValueProp());
+        company.setBannedWords(request.bannedWords() == null ? List.of() : request.bannedWords());
+        company.setBrandVoiceScale(request.brandVoiceScale() == null ? Map.of() : request.brandVoiceScale());
+        company.setCompetitorsDetail(request.competitorsDetail() == null ? List.of() : request.competitorsDetail());
     }
 
     public CompanyProfile toProfile(CompanyEntity company) {
@@ -93,7 +98,12 @@ public class CompanyService {
                 company.getValueProposition(),
                 company.getProductsOrServices(),
                 company.getCompetitors(),
-                company.getSocialLinks()
+                company.getSocialLinks(),
+                company.getProductName(),
+                company.getCoreValueProp(),
+                company.getBannedWords(),
+                company.getBrandVoiceScale(),
+                company.getCompetitorsDetail()
         );
     }
 
@@ -111,6 +121,11 @@ public class CompanyService {
                 company.getProductsOrServices(),
                 company.getCompetitors(),
                 company.getSocialLinks(),
+                company.getProductName(),
+                company.getCoreValueProp(),
+                company.getBannedWords(),
+                company.getBrandVoiceScale(),
+                company.getCompetitorsDetail(),
                 company.getCreatedAt(),
                 company.getUpdatedAt()
         );

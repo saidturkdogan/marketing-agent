@@ -4,6 +4,7 @@ import com.plinth.domain.CampaignState;
 import com.plinth.llm.LlmService;
 import com.plinth.prompt.PromptCatalog;
 import com.plinth.rag.RagService;
+import com.plinth.service.AgentIdentityService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -18,11 +19,13 @@ public class AnalyticsStep implements AgentStep {
     private final LlmService llmService;
     private final PromptCatalog prompts;
     private final RagService ragService;
+    private final AgentIdentityService identityService;
 
-    public AnalyticsStep(LlmService llmService, PromptCatalog prompts, RagService ragService) {
+    public AnalyticsStep(LlmService llmService, PromptCatalog prompts, RagService ragService, AgentIdentityService identityService) {
         this.llmService = llmService;
         this.prompts = prompts;
         this.ragService = ragService;
+        this.identityService = identityService;
     }
 
     @Override
@@ -38,11 +41,12 @@ public class AnalyticsStep implements AgentStep {
     @Override
     public void execute(CampaignState state) {
         String assetsSummary = summarizeAssets(state.getAssets());
+        String identityContext = identityService.buildIdentityContext(state.getCompanyProfile());
         String promptInput = "Campaign assets: " + assetsSummary
                 + "\n\nEvaluate the campaign quality on a scale of 0.0 to 1.0. "
                 + "Output your score on a separate line in the format 'SCORE: X.XX' (e.g., 'SCORE: 0.85'). "
                 + "Then provide concise learnings and recommendations.";
-        String learnings = llmService.generate(prompts.analytics(), promptInput);
+        String learnings = llmService.generate(prompts.analytics(identityContext), promptInput);
         double score = parseScore(learnings, assetsSummary);
 
         state.setPerformanceScore(score);
@@ -74,10 +78,6 @@ public class AnalyticsStep implements AgentStep {
         }
     }
 
-    /**
-     * Extracts a score from the LLM response. Falls back to content-based
-     * heuristics if parsing fails.
-     */
     private double parseScore(String learnings, String assetsSummary) {
         if (learnings != null) {
             for (String line : learnings.lines().toList()) {
@@ -96,14 +96,8 @@ public class AnalyticsStep implements AgentStep {
         return calculateHeuristicScore(assetsSummary);
     }
 
-    /**
-     * Content-based quality heuristics as fallback:
-     * - Presence of research, strategy, social assets: +0.2 each
-     * - Review passed: +0.25
-     * - Has analytics/learnings: +0.15
-     */
     private double calculateHeuristicScore(String assetsSummary) {
-        double score = 0.1; // baseline
+        double score = 0.1;
         if (assetsSummary.contains("research")) score += 0.2;
         if (assetsSummary.contains("strategy")) score += 0.2;
         if (assetsSummary.contains("social")) score += 0.2;

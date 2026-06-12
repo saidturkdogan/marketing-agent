@@ -143,6 +143,28 @@ public class CampaignService {
     }
 
     @SuppressWarnings("unchecked")
+    public PublishResult publishTwitter(String campaignId) {
+        CampaignEntity campaign = campaignPersistenceService.getCampaign(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found: " + campaignId));
+        ensureReviewPassed(campaign);
+        Map<String, Object> assets = campaign.getAssets();
+        Map<String, Object> twitter = getPlatformAsset(assets, "X");
+        if (twitter.isEmpty()) {
+            twitter = getPlatformAsset(assets, "Twitter");
+        }
+        String content = String.valueOf(twitter.getOrDefault("variant_a", ""));
+        if (content.isBlank()) {
+            content = String.valueOf(twitter.getOrDefault("content", ""));
+        }
+        if (content.isBlank()) {
+            throw new IllegalArgumentException("Twitter content not found for campaign: " + campaignId);
+        }
+        PublishResult result = publishService.publishTwitter(content);
+        campaignPersistenceService.savePublishLog(campaignId, result, Map.of("content", content));
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
     private Map<String, Object> getPlatformAsset(Map<String, Object> assets, String platformName) {
         Map<String, Object> social = (Map<String, Object>) assets.getOrDefault("social", Map.of());
         for (Map.Entry<String, Object> entry : social.entrySet()) {

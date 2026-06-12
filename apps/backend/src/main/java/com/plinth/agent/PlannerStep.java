@@ -3,6 +3,7 @@ package com.plinth.agent;
 import com.plinth.domain.CampaignState;
 import com.plinth.llm.LlmService;
 import com.plinth.prompt.PromptCatalog;
+import com.plinth.service.AgentIdentityService;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -12,10 +13,12 @@ public class PlannerStep implements AgentStep {
 
     private final LlmService llmService;
     private final PromptCatalog prompts;
+    private final AgentIdentityService identityService;
 
-    public PlannerStep(LlmService llmService, PromptCatalog prompts) {
+    public PlannerStep(LlmService llmService, PromptCatalog prompts, AgentIdentityService identityService) {
         this.llmService = llmService;
         this.prompts = prompts;
+        this.identityService = identityService;
     }
 
     @Override
@@ -30,8 +33,9 @@ public class PlannerStep implements AgentStep {
 
     @Override
     public void execute(CampaignState state) {
+        String identityContext = identityService.buildIdentityContext(state.getCompanyProfile());
         String planDraft = llmService.generate(
-                prompts.planner(),
+                prompts.planner(identityContext),
                 "Company context:\n" + state.getCompanyContext()
                         + "\n\nTopic: " + state.getTopic()
                         + "\nPlatforms: " + state.getPlatforms()

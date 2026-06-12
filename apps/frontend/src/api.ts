@@ -251,7 +251,7 @@ export function getStrategy(strategyId: string) {
 }
 
 export function getDashboard(companyId: string) {
-  return request<DashboardData>(`/api/dashboard/${companyId}`);
+  return request<DashboardData>(`/api/strategy/dashboard/${companyId}`);
 }
 
 export function aiSuggest(field: string, currentText: string, context?: string) {
@@ -259,4 +259,27 @@ export function aiSuggest(field: string, currentText: string, context?: string) 
     method: "POST",
     body: JSON.stringify({ field, currentText, context: context || "" }),
   });
+}
+
+export type PublishResponse = {
+  platform: string;
+  status: string;
+  externalId?: string;
+  url?: string;
+  message?: string;
+};
+
+export function publishCampaignToLinkedIn(campaignId: string) {
+  return request<PublishResponse>(`/api/campaigns/${campaignId}/publish/linkedin`, { method: "POST" });
+}
+
+export function publishCampaignToInstagram(campaignId: string, payload?: { caption?: string; imageUrl?: string }) {
+  return request<PublishResponse>(`/api/campaigns/${campaignId}/publish/meta/instagram`, {
+    method: "POST",
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+}
+
+export function publishCampaignToTwitter(campaignId: string) {
+  return request<PublishResponse>(`/api/campaigns/${campaignId}/publish/twitter`, { method: "POST" });
 }

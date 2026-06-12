@@ -5,9 +5,9 @@ import { setTokenGetter, syncClerkUser } from "./api";
 import { useAuthStore } from "./stores/authStore";
 import { ClerkAuthPage } from "./pages/ClerkAuthPage";
 import { LoginPage } from "./pages/LoginPage";
-import { ChatLayout } from "./pages/ChatLayout";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { AnalysisReportPage } from "./pages/AnalysisReportPage";
 
 type Props = { clerkEnabled: boolean };
 
@@ -59,11 +59,12 @@ function ClerkApp() {
 
   return (
     <Routes>
-      <Route path="/login" element={isSignedIn ? <Navigate to="/onboarding" replace /> : <ClerkAuthPage />} />
-      <Route path="/chat/:conversationId?" element={isSignedIn ? <ChatLayout /> : <Navigate to="/login" replace />} />
+      <Route path="/login" element={isSignedIn ? <Navigate to="/dashboard/" replace /> : <ClerkAuthPage />} />
       <Route path="/onboarding" element={isSignedIn ? <OnboardingPage clerkEnabled /> : <Navigate to="/login" replace />} />
+      <Route path="/report/:companyId" element={isSignedIn ? <AnalysisReportPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/:companyId" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to={isSignedIn ? "/onboarding" : "/login"} replace />} />
+      <Route path="/dashboard/" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to={isSignedIn ? "/dashboard/" : "/login"} replace />} />
     </Routes>
   );
 }
@@ -77,11 +78,12 @@ function DefaultApp() {
 
   return (
     <Routes>
-      <Route path="/login" element={token ? <Navigate to="/onboarding" replace /> : <LoginPage />} />
-      <Route path="/chat/:conversationId?" element={token ? <ChatLayout /> : <Navigate to="/login" replace />} />
+      <Route path="/login" element={token ? <Navigate to="/dashboard/" replace /> : <LoginPage />} />
       <Route path="/onboarding" element={token ? <OnboardingPage /> : <Navigate to="/login" replace />} />
+      <Route path="/report/:companyId" element={token ? <AnalysisReportPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/:companyId" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to={token ? "/onboarding" : "/login"} replace />} />
+      <Route path="/dashboard/" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to={token ? "/dashboard/" : "/login"} replace />} />
     </Routes>
   );
 }

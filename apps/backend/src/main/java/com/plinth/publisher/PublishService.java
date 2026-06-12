@@ -7,11 +7,14 @@ public class PublishService {
 
     private final LinkedInPublisherService linkedInPublisherService;
     private final InstagramGraphPublisherService instagramGraphPublisherService;
+    private final TwitterPublisherService twitterPublisherService;
 
     public PublishService(LinkedInPublisherService linkedInPublisherService,
-                          InstagramGraphPublisherService instagramGraphPublisherService) {
+                          InstagramGraphPublisherService instagramGraphPublisherService,
+                          TwitterPublisherService twitterPublisherService) {
         this.linkedInPublisherService = linkedInPublisherService;
         this.instagramGraphPublisherService = instagramGraphPublisherService;
+        this.twitterPublisherService = twitterPublisherService;
     }
 
     public PublishResult publishLinkedIn(String content) {
@@ -20,5 +23,9 @@ public class PublishService {
 
     public PublishResult publishInstagramImage(String imageUrl, String caption) {
         return instagramGraphPublisherService.publishImage(imageUrl, caption);
+    }
+
+    public PublishResult publishTwitter(String content) {
+        return twitterPublisherService.publishTweet(content);
     }
 }

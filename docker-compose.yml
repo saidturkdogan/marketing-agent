@@ -53,6 +53,8 @@ services:
       VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-pk_test_cGxlYXNhbnQtZWFyd2lnLTU3LmNsZXJrLmFjY291bnRzLmRldiQ}
     ports:
       - "5173:5173"
+    volumes:
+      - ./apps/frontend/src:/app/src
     depends_on:
       - backend
 

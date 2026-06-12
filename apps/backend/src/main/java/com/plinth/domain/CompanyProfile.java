@@ -16,7 +16,12 @@ public record CompanyProfile(
         String valueProposition,
         List<String> productsOrServices,
         List<String> competitors,
-        Map<String, Object> socialLinks
+        Map<String, Object> socialLinks,
+        String productName,
+        String coreValueProp,
+        List<String> bannedWords,
+        Map<String, Object> brandVoiceScale,
+        List<Map<String, Object>> competitorsDetail
 ) {
     public Map<String, Object> toMap() {
         return Map.ofEntries(
@@ -31,13 +36,20 @@ public record CompanyProfile(
                 Map.entry("value_proposition", safe(valueProposition)),
                 Map.entry("products_or_services", productsOrServices == null ? List.of() : productsOrServices),
                 Map.entry("competitors", competitors == null ? List.of() : competitors),
-                Map.entry("social_links", socialLinks == null ? Map.of() : socialLinks)
+                Map.entry("social_links", socialLinks == null ? Map.of() : socialLinks),
+                Map.entry("product_name", safe(productName)),
+                Map.entry("core_value_prop", safe(coreValueProp)),
+                Map.entry("banned_words", bannedWords == null ? List.of() : bannedWords),
+                Map.entry("brand_voice_scale", brandVoiceScale == null ? Map.of() : brandVoiceScale),
+                Map.entry("competitors_detail", competitorsDetail == null ? List.of() : competitorsDetail)
         );
     }
 
     public String toPromptContext() {
         StringJoiner joiner = new StringJoiner("\n");
         joiner.add("Company: " + safe(name));
+        addIfPresent(joiner, "Product Name", productName);
+        addIfPresent(joiner, "Core Value Proposition", coreValueProp);
         addIfPresent(joiner, "Website", websiteUrl);
         addIfPresent(joiner, "Logo URL", logoUrl);
         addIfPresent(joiner, "Industry", industry);
@@ -45,16 +57,42 @@ public record CompanyProfile(
         addIfPresent(joiner, "Target audience", targetAudience);
         addIfPresent(joiner, "Brand voice", brandVoice);
         addIfPresent(joiner, "Value proposition", valueProposition);
+        if (brandVoiceScale != null && !brandVoiceScale.isEmpty()) {
+            joiner.add("Brand Voice Scale (1-10): " + formatVoiceScale());
+        }
+        if (bannedWords != null && !bannedWords.isEmpty()) {
+            joiner.add("BANNED WORDS (NEVER use these): " + bannedWords);
+        }
         if (productsOrServices != null && !productsOrServices.isEmpty()) {
             joiner.add("Products or services: " + productsOrServices);
         }
         if (competitors != null && !competitors.isEmpty()) {
             joiner.add("Competitors: " + competitors);
         }
+        if (competitorsDetail != null && !competitorsDetail.isEmpty()) {
+            joiner.add("Competitor Intelligence: " + formatCompetitorIntel());
+        }
         if (socialLinks != null && !socialLinks.isEmpty()) {
             joiner.add("Social links: " + socialLinks);
         }
         return joiner.toString();
+    }
+
+    private String formatVoiceScale() {
+        StringJoiner sj = new StringJoiner(", ");
+        brandVoiceScale.forEach((k, v) -> sj.add(k + "=" + v + "/10"));
+        return sj.toString();
+    }
+
+    private String formatCompetitorIntel() {
+        StringJoiner sj = new StringJoiner(" | ");
+        for (Map<String, Object> comp : competitorsDetail) {
+            String name = String.valueOf(comp.getOrDefault("name", "?"));
+            String weakness = String.valueOf(comp.getOrDefault("weakness", "?"));
+            String advantage = String.valueOf(comp.getOrDefault("our_advantage", "?"));
+            sj.add(name + " [weakness: " + weakness + ", our advantage: " + advantage + "]");
+        }
+        return sj.toString();
     }
 
     private static void addIfPresent(StringJoiner joiner, String label, String value) {

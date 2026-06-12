@@ -4,6 +4,7 @@ import com.plinth.domain.CampaignState;
 import com.plinth.llm.LlmService;
 import com.plinth.prompt.PromptCatalog;
 import com.plinth.rag.RagService;
+import com.plinth.service.AgentIdentityService;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -15,11 +16,13 @@ public class StrategyStep implements AgentStep {
     private final LlmService llmService;
     private final PromptCatalog prompts;
     private final RagService ragService;
+    private final AgentIdentityService identityService;
 
-    public StrategyStep(LlmService llmService, PromptCatalog prompts, RagService ragService) {
+    public StrategyStep(LlmService llmService, PromptCatalog prompts, RagService ragService, AgentIdentityService identityService) {
         this.llmService = llmService;
         this.prompts = prompts;
         this.ragService = ragService;
+        this.identityService = identityService;
     }
 
     @Override
@@ -36,8 +39,9 @@ public class StrategyStep implements AgentStep {
     public void execute(CampaignState state) {
         String retrievalQuery = state.getCompanyProfile().name() + " " + state.getTopic() + " " + state.getCompanyProfile().industry();
         List<String> context = ragService.retrieveContext(retrievalQuery, 3);
+        String identityContext = identityService.buildIdentityContext(state.getCompanyProfile());
         String strategy = llmService.generate(
-                prompts.strategist(),
+                prompts.strategist(identityContext),
                 "Company context:\n" + state.getCompanyContext()
                         + "\n\nTopic: " + state.getTopic()
                         + "\nPlan: " + state.getPlan()

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createCompany } from "../api";
-import { CompanyPayload } from "../types";
+import type { CompanyPayload, BrandVoiceScale } from "../types";
+import BrandVoiceSliders from "./BrandVoiceSliders";
 import { X, Plus, Trash2 } from "lucide-react";
 
 type Props = {
@@ -10,6 +11,8 @@ type Props = {
 
 export function CreateCompanyModal({ onClose, onCreated }: Props) {
   const [name, setName] = useState("");
+  const [productName, setProductName] = useState("");
+  const [coreValueProp, setCoreValueProp] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [industry, setIndustry] = useState("");
@@ -22,6 +25,11 @@ export function CreateCompanyModal({ onClose, onCreated }: Props) {
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
   const [socialKey, setSocialKey] = useState("");
   const [socialValue, setSocialValue] = useState("");
+  const [bannedWords, setBannedWords] = useState<string[]>([]);
+  const [bannedInput, setBannedInput] = useState("");
+  const [brandVoiceScale, setBrandVoiceScale] = useState<BrandVoiceScale>({
+    humor: 5, professionalism: 5, technical_terms: 5, provocative: 5,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,6 +42,8 @@ export function CreateCompanyModal({ onClose, onCreated }: Props) {
 
     const payload: CompanyPayload = {
       name: name.trim(),
+      productName: productName.trim() || undefined,
+      coreValueProp: coreValueProp.trim() || undefined,
       websiteUrl: websiteUrl.trim() || undefined,
       logoUrl: logoUrl.trim() || undefined,
       industry: industry.trim() || undefined,
@@ -44,6 +54,8 @@ export function CreateCompanyModal({ onClose, onCreated }: Props) {
       productsOrServices: products.filter((p) => p.trim()),
       competitors: competitors.filter((c) => c.trim()),
       socialLinks: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
+      bannedWords: bannedWords.length > 0 ? bannedWords : undefined,
+      brandVoiceScale,
     };
 
     try {
@@ -232,6 +244,88 @@ export function CreateCompanyModal({ onClose, onCreated }: Props) {
               value={valueProposition}
               onChange={(e) => setValueProposition(e.target.value)}
             />
+          </div>
+
+          {/* Product Name */}
+          <div>
+            <label className="form-label">Product Name</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g. Ovura"
+              value={productName}
+              onChange={(e) => setProductName(e.target.value)}
+            />
+          </div>
+
+          {/* Core Value Prop */}
+          <div>
+            <label className="form-label">Core Value Proposition</label>
+            <textarea
+              className="form-textarea"
+              placeholder="e.g. AI-native kişiselleştirilmiş beslenme ve sağlık takibi"
+              value={coreValueProp}
+              onChange={(e) => setCoreValueProp(e.target.value)}
+              rows={2}
+            />
+          </div>
+
+          {/* Brand Voice Scale */}
+          <div className="rounded-lg border border-slate-200 p-4">
+            <BrandVoiceSliders value={brandVoiceScale} onChange={setBrandVoiceScale} />
+          </div>
+
+          {/* Banned Words */}
+          <div>
+            <label className="form-label">Banned Words (agent will never use)</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                className="form-input flex-1"
+                placeholder="Add a banned word..."
+                value={bannedInput}
+                onChange={(e) => setBannedInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const w = bannedInput.trim();
+                    if (w && !bannedWords.includes(w)) {
+                      setBannedWords([...bannedWords, w]);
+                    }
+                    setBannedInput("");
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const w = bannedInput.trim();
+                  if (w && !bannedWords.includes(w)) {
+                    setBannedWords([...bannedWords, w]);
+                  }
+                  setBannedInput("");
+                }}
+                className="rounded-lg bg-blue-500 px-3 py-2 text-white text-sm hover:bg-blue-600 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            {bannedWords.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {bannedWords.map((w, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
+                    {w}
+                    <button
+                      type="button"
+                      onClick={() => setBannedWords(bannedWords.filter((_, j) => j !== i))}
+                      className="text-red-400 hover:text-red-600 ml-0.5"
+                    >
+                      &times;
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Products / Services */}

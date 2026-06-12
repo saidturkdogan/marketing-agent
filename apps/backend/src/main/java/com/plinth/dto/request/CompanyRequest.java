@@ -16,6 +16,11 @@ public record CompanyRequest(
         String valueProposition,
         List<String> productsOrServices,
         List<String> competitors,
-        Map<String, Object> socialLinks
+        Map<String, Object> socialLinks,
+        String productName,
+        String coreValueProp,
+        List<String> bannedWords,
+        Map<String, Object> brandVoiceScale,
+        List<Map<String, Object>> competitorsDetail
 ) {
 }

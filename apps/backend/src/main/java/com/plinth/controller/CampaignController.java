@@ -55,6 +55,11 @@ public class CampaignController {
         return campaignService.publishInstagram(campaignId, request);
     }
 
+    @PostMapping("/{campaignId}/publish/twitter")
+    public PublishResult publishTwitter(@PathVariable String campaignId) {
+        return campaignService.publishTwitter(campaignId);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Map<String, String> handleNotFound(IllegalArgumentException ex) {
