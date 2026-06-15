@@ -23,6 +23,7 @@ public record StrategyResponse(
         Map<String, Object> calendar,
         double marketingScore,
         List<Map<String, Object>> opportunities,
+        Map<String, Object> pipelineAssets,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

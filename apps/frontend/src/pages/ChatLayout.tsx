@@ -352,7 +352,7 @@ export function ChatLayout() {
                 </div>
 
                 <div className="grid gap-3 mb-6">
-                  {/* Campaign score */}
+                  {null}
                   <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-slate-500 uppercase tracking-wide">Campaign Score</span>
@@ -365,7 +365,7 @@ export function ChatLayout() {
                   </div>
 
                   {/* Plan */}
-                  {campaign.plan && Object.keys(campaign.plan).length > 0 && (
+                  {campaign.plan != null && Object.keys(campaign.plan).length > 0 && (
                     <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <Target className="h-4 w-4 text-blue-400" />
@@ -398,7 +398,7 @@ export function ChatLayout() {
                   </div>
 
                   {/* Social assets summary */}
-                  {campaign.assets && (campaign.assets as Record<string, unknown>).social && (
+                  {campaign.assets != null && !!((campaign.assets as Record<string, unknown>).social) && (
                     <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
                       <div className="flex items-center gap-2 mb-2">
                         <Zap className="h-4 w-4 text-amber-400" />

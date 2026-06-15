@@ -10,6 +10,8 @@ public record DashboardResponse(
         int competitorWeaknesses,
         int keywordsFound,
         List<Map<String, Object>> opportunities,
-        Map<String, Object> calendar
+        Map<String, Object> calendar,
+        Map<String, Object> strategy,
+        Map<String, Object> pipelineAssets
 ) {
 }

@@ -82,6 +82,10 @@ public class StrategyEntity {
     @Convert(converter = ListMapJsonConverter.class)
     private List<Map<String, Object>> opportunities;
 
+    @Column(columnDefinition = "TEXT")
+    @Convert(converter = MapJsonConverter.class)
+    private Map<String, Object> pipelineAssets;
+
     @Convert(converter = StringListJsonConverter.class)
     @Column(columnDefinition = "text")
     private List<String> competitorUrls;
@@ -156,6 +160,9 @@ public class StrategyEntity {
 
     public List<Map<String, Object>> getOpportunities() { return opportunities; }
     public void setOpportunities(List<Map<String, Object>> opportunities) { this.opportunities = opportunities; }
+
+    public Map<String, Object> getPipelineAssets() { return pipelineAssets; }
+    public void setPipelineAssets(Map<String, Object> pipelineAssets) { this.pipelineAssets = pipelineAssets; }
 
     public List<String> getCompetitorUrls() { return competitorUrls; }
     public void setCompetitorUrls(List<String> competitorUrls) { this.competitorUrls = competitorUrls; }

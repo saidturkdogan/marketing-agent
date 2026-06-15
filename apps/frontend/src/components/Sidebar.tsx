@@ -5,7 +5,6 @@ import {
   Sparkles,
   ChevronDown,
   Plus,
-  Search,
   LogOut,
   Building2,
   Check,
@@ -28,7 +27,6 @@ export function Sidebar({
   onLogout,
 }: Props) {
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [search, setSearch] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
   const userName = useAuthStore((s) => s.name);
@@ -46,12 +44,6 @@ export function Sidebar({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
-
-  const filtered = search.trim()
-    ? companies.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase())
-      )
-    : companies;
 
   return (
     <>
@@ -86,29 +78,14 @@ export function Sidebar({
           {/* Dropdown */}
           {switcherOpen && (
             <div className="absolute left-3 right-3 top-full z-40 mt-1 rounded-xl border border-slate-700 bg-slate-800 shadow-2xl">
-              {/* Search */}
-              <div className="p-2">
-                <div className="flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2">
-                  <Search className="h-4 w-4 text-slate-500" />
-                  <input
-                    type="text"
-                    placeholder="Search brands..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 outline-none"
-                  />
-                </div>
-              </div>
-
               {/* List */}
-              <div className="max-h-60 overflow-y-auto px-1 pb-1">
-                {filtered.map((company) => (
+              <div className="max-h-60 overflow-y-auto px-1 py-1">
+                {companies.map((company) => (
                   <button
                     key={company.companyId}
                     onClick={() => {
                       onSelectCompany(company.companyId);
                       setSwitcherOpen(false);
-                      setSearch("");
                     }}
                     className={`company-switcher-item w-full text-left text-sm ${
                       company.companyId === selectedCompanyId ? "selected" : ""
@@ -134,8 +111,8 @@ export function Sidebar({
                   </button>
                 ))}
 
-                {filtered.length === 0 && (
-                  <p className="px-4 py-3 text-xs text-slate-500">No brands found</p>
+                {companies.length === 0 && (
+                  <p className="px-4 py-3 text-xs text-slate-500">No brands yet</p>
                 )}
               </div>
 
@@ -145,7 +122,6 @@ export function Sidebar({
                   onClick={() => {
                     setSwitcherOpen(false);
                     setShowCreateModal(true);
-                    setSearch("");
                   }}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 transition-colors hover:bg-slate-700"
                 >

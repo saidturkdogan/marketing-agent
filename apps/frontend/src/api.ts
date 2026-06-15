@@ -10,6 +10,8 @@ import type {
   DashboardData,
   Opportunity,
   StrategyData,
+  ProgressiveResponse,
+  ProgressiveRequest,
 } from "./types";
 
 export interface StrategyRequest {
@@ -261,6 +263,39 @@ export function aiSuggest(field: string, currentText: string, context?: string) 
   });
 }
 
+// Progressive Pipeline
+export function runPipelineResearch(req: ProgressiveRequest) {
+  return request<ProgressiveResponse>("/api/pipeline/research", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export function runPipelineStrategy(strategyId: string) {
+  return request<ProgressiveResponse>(`/api/pipeline/strategy/${strategyId}`, {
+    method: "POST",
+  });
+}
+
+export function runPipelinePlan(strategyId: string) {
+  return request<ProgressiveResponse>(`/api/pipeline/plan/${strategyId}`, {
+    method: "POST",
+  });
+}
+
+export function updateAssetStatus(strategyId: string, type: string, index: number | null, status: "approved" | "rejected") {
+  return request<ProgressiveResponse>(`/api/pipeline/asset-status/${strategyId}`, {
+    method: "POST",
+    body: JSON.stringify({ type, index, status }),
+  });
+}
+
+export function runPipelineAssets(strategyId: string) {
+  return request<ProgressiveResponse>(`/api/pipeline/assets/${strategyId}`, {
+    method: "POST",
+  });
+}
+
 export type PublishResponse = {
   platform: string;
   status: string;
@@ -268,6 +303,20 @@ export type PublishResponse = {
   url?: string;
   message?: string;
 };
+
+export function publishScheduleItem(strategyId: string, scheduleIndex: number) {
+  return request<PublishResponse>(`/api/pipeline/publish/schedule/${strategyId}`, {
+    method: "POST",
+    body: JSON.stringify({ scheduleIndex }),
+  });
+}
+
+export function publishPipelinePostToLinkedIn(strategyId: string, index: number) {
+  return request<PublishResponse>(`/api/pipeline/publish/linkedin/${strategyId}`, {
+    method: "POST",
+    body: JSON.stringify({ index }),
+  });
+}
 
 export function publishCampaignToLinkedIn(campaignId: string) {
   return request<PublishResponse>(`/api/campaigns/${campaignId}/publish/linkedin`, { method: "POST" });

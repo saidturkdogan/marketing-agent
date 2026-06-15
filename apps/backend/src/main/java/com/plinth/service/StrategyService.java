@@ -288,7 +288,7 @@ public class StrategyService {
                 .orElse(null);
 
         if (entity == null) {
-            return new DashboardResponse(null, 0, 0, 0, 0, List.of(), Map.of());
+            return new DashboardResponse(null, 0, 0, 0, 0, List.of(), Map.of(), Map.of(), Map.of());
         }
 
         return new DashboardResponse(
@@ -298,7 +298,9 @@ public class StrategyService {
                 countCompetitorWeaknesses(entity),
                 countKeywordsFound(entity),
                 entity.getOpportunities() != null ? entity.getOpportunities() : List.of(),
-                entity.getCalendar() != null ? entity.getCalendar() : Map.of()
+                entity.getCalendar() != null ? entity.getCalendar() : Map.of(),
+                entity.getStrategy() != null ? entity.getStrategy() : Map.of(),
+                entity.getPipelineAssets() != null ? entity.getPipelineAssets() : Map.of()
         );
     }
 
@@ -387,6 +389,7 @@ public class StrategyService {
                 entity.getCalendar(),
                 entity.getMarketingScore(),
                 entity.getOpportunities(),
+                entity.getPipelineAssets(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

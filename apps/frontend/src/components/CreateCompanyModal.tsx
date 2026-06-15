@@ -6,7 +6,7 @@ import { X, Plus, Trash2 } from "lucide-react";
 
 type Props = {
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (companyId: string) => void;
 };
 
 export function CreateCompanyModal({ onClose, onCreated }: Props) {
@@ -59,8 +59,8 @@ export function CreateCompanyModal({ onClose, onCreated }: Props) {
     };
 
     try {
-      await createCompany(payload);
-      onCreated();
+      const created = await createCompany(payload);
+      onCreated(created.companyId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create brand");
     } finally {

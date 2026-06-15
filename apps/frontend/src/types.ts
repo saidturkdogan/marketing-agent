@@ -142,6 +142,8 @@ export interface DashboardData {
   keywordsFound: number;
   opportunities: Opportunity[];
   calendar?: CalendarData;
+  strategy?: Record<string, unknown>;
+  pipelineAssets?: Record<string, unknown>;
 }
 
 // ── Detailed Analysis Types ──────────────────────────────────────
@@ -178,7 +180,7 @@ export interface WebsiteAnalysis {
   key_takeaways?: string[];
 }
 
-export interface CompetitorDetail {
+export interface AnalysisCompetitor {
   name: string;
   url: string;
   strengths: string[];
@@ -200,7 +202,7 @@ export interface LandscapeMatrix {
 }
 
 export interface CompetitorAnalysis {
-  competitors: CompetitorDetail[];
+  competitors: AnalysisCompetitor[];
   common_patterns: string[];
   market_gaps: string[];
   landscape_matrix: LandscapeMatrix;
@@ -422,3 +424,29 @@ export type ProductDigitalTwin = {
   banned_words: string[];
   competitors: CompetitorDetail[];
 };
+
+// Progressive Pipeline Types
+export type PipelineStage = "research" | "strategy" | "plan" | "assets" | "complete";
+
+export interface ProgressiveResponse {
+  strategyId: string;
+  companyId: string;
+  currentStage: PipelineStage;
+  nextStage: PipelineStage | null;
+  nextAvailable: boolean;
+  data: Record<string, unknown>;
+  message: string;
+}
+
+export interface ProgressiveRequest {
+  companyId: string;
+  websiteUrl?: string;
+  companyName?: string;
+  industry?: string;
+  productDescription?: string;
+  targetAudience?: string;
+  targetCountry?: string;
+  goal?: string;
+  competitorUrls?: string[];
+  strategyId?: string;
+}

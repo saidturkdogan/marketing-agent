@@ -8,6 +8,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { AnalysisReportPage } from "./pages/AnalysisReportPage";
+import { ProgressivePipelinePage } from "./pages/ProgressivePipelinePage";
 
 type Props = { clerkEnabled: boolean };
 
@@ -62,6 +63,7 @@ function ClerkApp() {
       <Route path="/login" element={isSignedIn ? <Navigate to="/dashboard/" replace /> : <ClerkAuthPage />} />
       <Route path="/onboarding" element={isSignedIn ? <OnboardingPage clerkEnabled /> : <Navigate to="/login" replace />} />
       <Route path="/report/:companyId" element={isSignedIn ? <AnalysisReportPage /> : <Navigate to="/login" replace />} />
+      <Route path="/pipeline/:companyId" element={isSignedIn ? <ProgressivePipelinePage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/:companyId" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to={isSignedIn ? "/dashboard/" : "/login"} replace />} />
@@ -81,6 +83,7 @@ function DefaultApp() {
       <Route path="/login" element={token ? <Navigate to="/dashboard/" replace /> : <LoginPage />} />
       <Route path="/onboarding" element={token ? <OnboardingPage /> : <Navigate to="/login" replace />} />
       <Route path="/report/:companyId" element={token ? <AnalysisReportPage /> : <Navigate to="/login" replace />} />
+      <Route path="/pipeline/:companyId" element={token ? <ProgressivePipelinePage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/:companyId" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to={token ? "/dashboard/" : "/login"} replace />} />
