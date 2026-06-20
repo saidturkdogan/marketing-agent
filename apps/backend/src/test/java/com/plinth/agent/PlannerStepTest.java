@@ -68,7 +68,7 @@ class PlannerStepTest {
         when(knowledgeBaseService.buildKnowledgeContext(anyString())).thenReturn("");
 
         CompanyProfile profile = new CompanyProfile(
-                "c1", "TestCo", "https://test.co", null, "Tech",
+                "c1", "TestCo", null, null, "https://test.co", null, "Tech",
                 "A test company", "Developers", "Professional", "Best value",
                 List.of("Product A"), List.of("Competitor X"), null,
                 null, null, null, null, null

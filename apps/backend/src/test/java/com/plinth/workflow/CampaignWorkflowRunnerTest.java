@@ -45,7 +45,7 @@ class CampaignWorkflowRunnerTest {
     @Test
     void shouldExecuteAllStepsAndComplete() {
         CompanyProfile profile = new CompanyProfile(
-                "c1", "TestCo", null, null, "Tech", "desc",
+                "c1", "TestCo", null, null, null, null, "Tech", "desc",
                 "audience", "voice", "vp", List.of(), List.of(), null,
                 null, null, null, null, null
         );
@@ -80,7 +80,7 @@ class CampaignWorkflowRunnerTest {
 
         CampaignWorkflowRunner runner = new CampaignWorkflowRunner(List.of(step1, failingStep));
         CompanyProfile profile = new CompanyProfile(
-                "c1", "TestCo", null, null, "Tech", "desc",
+                "c1", "TestCo", null, null, null, null, "Tech", "desc",
                 "audience", "voice", "vp", List.of(), List.of(), null,
                 null, null, null, null, null
         );
@@ -104,7 +104,7 @@ class CampaignWorkflowRunnerTest {
 
         CampaignWorkflowRunner runner = new CampaignWorkflowRunner(List.of(criticalFailing));
         CompanyProfile profile = new CompanyProfile(
-                "c1", "TestCo", null, null, "Tech", "desc",
+                "c1", "TestCo", null, null, null, null, "Tech", "desc",
                 "audience", "voice", "vp", List.of(), List.of(), null,
                 null, null, null, null, null
         );

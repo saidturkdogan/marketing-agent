@@ -7,6 +7,8 @@ import java.util.Map;
 
 public record CompanyRequest(
         @NotBlank String name,
+        String role,
+        String companySize,
         String websiteUrl,
         String logoUrl,
         String industry,

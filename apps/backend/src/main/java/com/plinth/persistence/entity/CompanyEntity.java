@@ -31,6 +31,12 @@ public class CompanyEntity {
     @Column(nullable = false, length = 500)
     private String name;
 
+    @Column(length = 50)
+    private String role;
+
+    @Column(name = "company_size", length = 20)
+    private String companySize;
+
     @Column(name = "website_url", length = 2000)
     private String websiteUrl;
 
@@ -108,6 +114,10 @@ public class CompanyEntity {
     public void setCompanyId(String companyId) { this.companyId = companyId; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
+    public String getCompanySize() { return companySize; }
+    public void setCompanySize(String companySize) { this.companySize = companySize; }
     public String getWebsiteUrl() { return websiteUrl; }
     public void setWebsiteUrl(String websiteUrl) { this.websiteUrl = websiteUrl; }
     public String getLogoUrl() { return logoUrl; }

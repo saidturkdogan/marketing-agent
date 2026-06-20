@@ -68,6 +68,8 @@ public class CompanyService {
 
     private void applyRequest(CompanyEntity company, CompanyRequest request) {
         company.setName(request.name());
+        company.setRole(request.role());
+        company.setCompanySize(request.companySize());
         company.setWebsiteUrl(request.websiteUrl());
         company.setLogoUrl(request.logoUrl());
         company.setIndustry(request.industry());
@@ -89,6 +91,8 @@ public class CompanyService {
         return new CompanyProfile(
                 company.getCompanyId(),
                 company.getName(),
+                company.getRole(),
+                company.getCompanySize(),
                 company.getWebsiteUrl(),
                 company.getLogoUrl(),
                 company.getIndustry(),
@@ -111,6 +115,8 @@ public class CompanyService {
         return new CompanyResponse(
                 company.getCompanyId(),
                 company.getName(),
+                company.getRole(),
+                company.getCompanySize(),
                 company.getWebsiteUrl(),
                 company.getLogoUrl(),
                 company.getIndustry(),

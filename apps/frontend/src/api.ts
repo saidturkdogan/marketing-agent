@@ -148,6 +148,27 @@ export function saveMessage(conversationId: string, role: "user" | "assistant", 
   );
 }
 
+// Gmail
+export function getGmailAuthUrl(companyId: string) {
+  return request<{ url: string }>(`/api/gmail/auth-url?companyId=${encodeURIComponent(companyId)}`);
+}
+
+export function getGmailStatus(companyId: string) {
+  return request<{ connected: boolean; companyId: string }>(`/api/gmail/status/${companyId}`);
+}
+
+export function fetchGmailEmails(companyId: string, maxResults = 20) {
+  return request<{ fetched: number; companyId: string }>(`/api/gmail/fetch/${companyId}?maxResults=${maxResults}`, {
+    method: "POST",
+  });
+}
+
+export function getGmailMessages(companyId: string) {
+  return request<Array<{ id: number; messageId: string; from: string; to: string; subject: string; snippet: string; receivedAt: string }>>(
+    `/api/gmail/messages/${companyId}`
+  );
+}
+
 // Campaigns
 export function createCampaign(payload: CampaignRequest) {
   return request<CampaignResponse>("/api/campaigns", {

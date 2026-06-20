@@ -1,6 +1,8 @@
 export type Company = {
   companyId: string;
   name: string;
+  role?: string;
+  companySize?: string;
   websiteUrl?: string;
   logoUrl?: string;
   industry?: string;

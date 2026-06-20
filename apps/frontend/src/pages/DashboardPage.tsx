@@ -16,12 +16,13 @@ import {
   Linkedin, Mail, Check, ArrowRight, X, Search, ChevronDown, ChevronRight,
   Lightbulb, Star, Layers, TrendingUp, Users, MessageSquare, LogOut, LayoutDashboard,
   ThumbsUp, Plus, Building2, Moon, Sun, Monitor, Palette, RefreshCw,
+  Home, Bookmark, Phone, HelpCircle, Bell, Network, Activity, Inbox,
 } from "lucide-react";
 
 type View = "overview" | "content" | "approval" | "settings";
 
-const NAV_ITEMS: { id: View; label: string; icon: typeof BarChart3; badge?: string }[] = [
-  { id: "overview", label: "Dashboard", icon: LayoutDashboard },
+const NAV_ITEMS: { id: View; label: string; icon: typeof Home }[] = [
+  { id: "overview", label: "Dashboard", icon: Home },
   { id: "content", label: "İçerikler", icon: FileText },
   { id: "approval", label: "Onay Havuzu", icon: ThumbsUp },
   { id: "settings", label: "Ayarlar", icon: Settings },
@@ -41,6 +42,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const token = useAuthStore((s) => s.token);
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
+  const userName = useAuthStore((s) => s.name);
 
   const [view, setView] = useState<View>("overview");
   const [selectedContent, setSelectedContent] = useState<Record<string, unknown> | null>(null);
@@ -152,80 +154,153 @@ export function DashboardPage() {
           : [])
       : [];
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
+
+  const formatDate = () => {
+    const date = new Date();
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  };
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background font-sans">
-      {/* Sidebar */}
-      <div className="w-[200px] flex flex-col bg-sidebar border-r border-sidebar-border flex-shrink-0">
-        <div className="p-4 flex flex-col h-full">
-          <div className="flex items-center gap-2 mb-6 px-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-              <Sparkles className="h-4 w-4 text-white" />
-            </div>
-            <span className="font-semibold text-sidebar-foreground text-sm">Plinth</span>
-          </div>
-
-          <div className="relative mb-4 px-2" ref={switcherRef}>
-            <button onClick={() => setSwitcherOpen(!switcherOpen)}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors hover:bg-sidebar-accent/50">
-              <div className="flex h-5 w-5 items-center justify-center rounded-md bg-blue-600/20 text-[9px] font-bold text-blue-400">
-                {companies.find(c => c.companyId === companyId)?.name?.charAt(0) ?? "?"}
-              </div>
-              <span className="flex-1 truncate text-left font-medium text-sidebar-foreground">
-                {companies.find(c => c.companyId === companyId)?.name ?? "Brand"}
-              </span>
-              <ChevronDown className={`h-3 w-3 text-sidebar-foreground/40 transition-transform ${switcherOpen ? "rotate-180" : ""}`} />
-            </button>
-            {switcherOpen && (
-              <div className="absolute left-2 right-2 top-full z-40 mt-1 rounded-lg border border-sidebar-border bg-sidebar-accent shadow-xl">
-                <div className="max-h-48 overflow-y-auto px-1 py-1">
-                  {companies.map((c) => (
-                    <button key={c.companyId} onClick={() => { setSwitcherOpen(false); navigate(`/dashboard/${c.companyId}`, { replace: true }); }}
-                      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors ${
-                        c.companyId === companyId ? "bg-blue-600/10 text-blue-400" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"}`}>
-                      <span className="flex-1 truncate text-left">{c.name}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="border-t border-sidebar-border p-1">
-                  <button onClick={() => { setSwitcherOpen(false); setShowCreateModal(true); }}
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-sidebar-foreground/60 hover:bg-sidebar-accent/50">
-                    <Plus className="h-3 w-3 text-blue-400" /> New brand
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
+      {/* Icon-only Sidebar */}
+      <div className="w-[60px] flex flex-col bg-[#2E2F32] flex-shrink-0">
+        <div className="p-3 flex flex-col h-full">
+          {/* Navigation Icons */}
           <nav className="space-y-1 flex-1">
-            {NAV_ITEMS.map((item) => (
-              <Button key={item.id} variant={view === item.id ? "secondary" : "ghost"}
-                className={`w-full justify-start gap-3 h-9 text-xs font-medium ${view === item.id ? "" : "text-sidebar-foreground hover:text-sidebar-accent-foreground"}`}
-                onClick={() => setView(item.id)}>
-                <item.icon className="h-4 w-4" />
-                <span>{item.label}</span>
-              </Button>
-            ))}
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setView(item.id)}
+                  className={`w-full flex flex-col items-center justify-center gap-1 h-14 rounded-lg transition-colors ${
+                    view === item.id
+                      ? "bg-sidebar-accent text-sidebar-primary"
+                      : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                  }`}
+                  title={item.label}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span className="text-[9px] font-medium">{item.label}</span>
+                </button>
+              );
+            })}
           </nav>
 
-          <div className="border-t border-sidebar-border pt-2 space-y-1">
+          {/* Bottom Icons */}
+          <div className="space-y-1 border-t border-sidebar-border pt-2">
             <div className="relative" ref={themePickerRef}>
-              <button onClick={() => setThemePickerOpen(!themePickerOpen)}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-[11px] text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors">
-                {(() => { const t = THEMES.find(t => t.id === currentTheme); const Icon = t?.icon ?? Moon; return <Icon className="h-3.5 w-3.5" />; })()}
-                <span className="flex-1 text-left">{THEMES.find(t => t.id === currentTheme)?.label ?? "Theme"}</span>
+              <button
+                onClick={() => setThemePickerOpen(!themePickerOpen)}
+                className="w-full flex flex-col items-center justify-center gap-1 h-14 rounded-lg text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+                title="Theme"
+              >
+                {(() => {
+                  const t = THEMES.find(t => t.id === currentTheme);
+                  const Icon = t?.icon ?? Moon;
+                  return <Icon className="h-5 w-5" />;
+                })()}
               </button>
+              {themePickerOpen && (
+                <div className="absolute left-14 bottom-0 z-40 rounded-lg border border-sidebar-border bg-sidebar-accent shadow-xl p-1">
+                  {THEMES.map((theme) => {
+                    const Icon = theme.icon;
+                    return (
+                      <button
+                        key={theme.id}
+                        onClick={() => { setCurrentTheme(theme.id); setThemePickerOpen(false); }}
+                        className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                          currentTheme === theme.id ? "bg-blue-600/10 text-blue-400" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        <span>{theme.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            <button onClick={() => { useAuthStore.getState().clearAuth(); navigate("/login", { replace: true }); }}
-              className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-[11px] text-sidebar-foreground/50 hover:text-red-400 transition-colors">
-              <LogOut className="h-3.5 w-3.5" /> Sign out
+            <button
+              onClick={() => { useAuthStore.getState().clearAuth(); navigate("/login", { replace: true }); }}
+              className="w-full flex flex-col items-center justify-center gap-1 h-14 rounded-lg text-sidebar-foreground/60 hover:text-red-400 transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="h-5 w-5" />
+              <span className="text-[9px] font-medium">Sign out</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto px-6 py-6">
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden bg-white">
+        {/* Top Navigation Bar */}
+        <div className="h-14 bg-[#2E2F32] flex items-center justify-between px-4 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-6 rounded bg-[#FF7A59] flex items-center justify-center">
+                <Sparkles className="h-4 w-4 text-white" />
+              </div>
+            </div>
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Find or Ask"
+                className="w-full h-9 pl-9 pr-4 rounded-md bg-[#3a3b3e] text-white text-sm placeholder-gray-400 border border-transparent focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+            <button className="h-9 w-9 rounded-full bg-[#3a3b3e] flex items-center justify-center text-white hover:bg-[#4a4b4e] transition-colors">
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button className="h-9 px-3 rounded-md text-white text-sm font-medium hover:bg-[#3a3b3e] transition-colors flex items-center gap-2">
+              <ArrowRight className="h-4 w-4 rotate-180" />
+              Upgrade
+            </button>
+            <Separator orientation="vertical" className="h-6 bg-gray-600 mx-2" />
+            <button className="h-9 w-9 rounded-md flex items-center justify-center text-white hover:bg-[#3a3b3e] transition-colors">
+              <Phone className="h-4 w-4" />
+            </button>
+            <button className="h-9 w-9 rounded-md flex items-center justify-center text-white hover:bg-[#3a3b3e] transition-colors">
+              <Building2 className="h-4 w-4" />
+            </button>
+            <button className="h-9 w-9 rounded-md flex items-center justify-center text-white hover:bg-[#3a3b3e] transition-colors">
+              <HelpCircle className="h-4 w-4" />
+            </button>
+            <button className="h-9 w-9 rounded-md flex items-center justify-center text-white hover:bg-[#3a3b3e] transition-colors">
+              <Settings className="h-4 w-4" />
+            </button>
+            <button className="h-9 w-9 rounded-md flex items-center justify-center text-white hover:bg-[#3a3b3e] transition-colors">
+              <Bell className="h-4 w-4" />
+            </button>
+            <Separator orientation="vertical" className="h-6 bg-gray-600 mx-2" />
+            <button className="h-9 px-3 rounded-md text-white text-sm font-medium hover:bg-[#3a3b3e] transition-colors flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              Assistant
+            </button>
+            <Separator orientation="vertical" className="h-6 bg-gray-600 mx-2" />
+            <button className="h-9 px-3 rounded-md text-white text-sm font-medium hover:bg-[#3a3b3e] transition-colors flex items-center gap-2">
+              <div className="h-6 w-6 rounded-full bg-gray-600 flex items-center justify-center text-xs">
+                {userName ? userName.charAt(0) : "U"}
+              </div>
+              {userName ?? "User"}
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Dashboard Content */}
+        <div className="flex-1 overflow-y-auto">
           {view === "overview" && (
             <OverviewView
               companyId={companyId}
@@ -239,6 +314,9 @@ export function DashboardPage() {
               strategyId={dashboardData?.strategyId}
               onNewPipeline={() => navigate(`/pipeline/${companyId}`)}
               onSelectContent={(item) => { setSelectedContent(item); setView("content"); }}
+              greeting={getGreeting()}
+              date={formatDate()}
+              userName={userName}
             />
           )}
           {view === "content" && (
@@ -272,11 +350,13 @@ export function DashboardPage() {
 
 function OverviewView({
   companyId, company, dashboardData, strategy, calendar, weekDays, assets, pillars, strategyId, onNewPipeline, onSelectContent,
+  greeting, date, userName,
 }: {
   companyId?: string; company: Company | null; dashboardData: DashboardData | null;
   strategy: Record<string, unknown>; calendar: { days: Record<string, unknown>[]; weeks: Record<string, unknown>[]; weekThemes: Record<string, unknown>[] };
   weekDays: Record<string, unknown>[]; assets: { posts: Record<string, unknown>[]; newsletter: Record<string, unknown>; schedule: Record<string, unknown>[] };
   pillars: Record<string, unknown>[]; strategyId?: string; onNewPipeline: () => void; onSelectContent?: (item: Record<string, unknown>) => void;
+  greeting: string; date: string; userName?: string;
 }) {
   const info = {
     name: company?.name || "",
@@ -286,83 +366,187 @@ function OverviewView({
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Company Info Bar */}
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <span className="font-semibold text-foreground">{info.name}</span>
-        {info.industry && <><Separator orientation="vertical" className="h-4" /><span>{info.industry}</span></>}
-        {info.website && <><Separator orientation="vertical" className="h-4" /><span className="truncate max-w-[200px]">{info.website}</span></>}
+    <div className="max-w-[1400px] mx-auto px-8 py-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-gray-500 mb-1">{date}</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {greeting}, {(userName?.split(' ')[0]) || "User"}
+          </h1>
+        </div>
+        <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+          <Settings className="h-4 w-4" />
+          Customize
+        </button>
       </div>
 
-      {/* Calendar View */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Calendar Grid */}
-        <div className="lg:col-span-3 space-y-4">
-          <CalendarGrid weekDays={weekDays} calendar={calendar} assets={assets} strategyId={strategyId} onSelectItem={onSelectContent} />
+      {/* Meetings Section */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Calendar className="h-5 w-5 text-gray-700" />
+          <h2 className="text-lg font-semibold text-gray-900">Meetings</h2>
         </div>
 
-        {/* Right: Strategy Summary */}
-        <div className="space-y-6">
-          {/* Strategic Pillars */}
-          {pillars.length > 0 && (
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Layers className="h-4 w-4 text-violet-400" />
-                  <h3 className="text-sm font-semibold text-foreground">Stratejik Pillar'lar</h3>
-                </div>
-                <div className="space-y-2">
-                  {pillars.map((p, i) => (
-                    <div key={i} className="p-3 rounded-lg bg-muted/50">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Star className="h-3 w-3 text-violet-400" />
-                        <p className="text-xs font-semibold text-foreground">{typeof p.name === "string" ? p.name : ""}</p>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">{typeof p.description === "string" ? p.description : ""}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Calendar */}
+          <div className="lg:col-span-2 border border-gray-200 rounded-lg overflow-hidden">
+            <CalendarGrid weekDays={weekDays} calendar={calendar} assets={assets} strategyId={strategyId} onSelectItem={onSelectContent} />
+          </div>
 
-          {/* Weekly Themes */}
-          {calendar.weekThemes.length > 0 && (
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp className="h-4 w-4 text-emerald-400" />
-                  <h3 className="text-sm font-semibold text-foreground">Haftalık Temalar</h3>
-                </div>
-                <div className="space-y-2">
-                  {calendar.weekThemes.map((wt, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs">
-                      <div className="flex h-6 w-6 items-center justify-center rounded bg-emerald-600/10 text-emerald-400 text-[9px] font-bold">
-                        W{typeof wt.week === "number" ? wt.week : i + 1}
-                      </div>
-                      <span className="text-foreground font-medium">{typeof wt.theme === "string" ? wt.theme : ""}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Right: Prep Card */}
+          <div className="border border-gray-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Prep for your meetings that matter most
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Connect your calendar to highlight meetings that help you close deals.
+            </p>
+            <Button className="w-full bg-gray-900 hover:bg-gray-800 text-white">
+              <Inbox className="h-4 w-4 mr-2" />
+              Connect your calendar
+            </Button>
+          </div>
+        </div>
+      </div>
 
-          {/* Quick Actions */}
-          <Card>
-            <CardContent className="p-5">
-              <h3 className="text-sm font-semibold text-foreground mb-3">Hızlı Aksiyonlar</h3>
-              <div className="space-y-2">
-                <Button variant="outline" className="w-full justify-start h-9 text-xs gap-2" onClick={onNewPipeline}>
-                  <RefreshCw className="h-3 w-3" /> Yeni Pipeline Başlat
-                </Button>
-                <Button variant="outline" className="w-full justify-start h-9 text-xs gap-2" asChild>
-                  <a href={`/pipeline/${companyId}`}><ArrowRight className="h-3 w-3" /> Pipeline'a Devam Et</a>
-                </Button>
-              </div>
+      {/* Grow your sales pipeline */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-gray-700" />
+            <h2 className="text-lg font-semibold text-gray-900">Grow your sales pipeline</h2>
+          </div>
+          <button className="text-sm text-[#009982] font-medium hover:underline flex items-center gap-1">
+            See what's next →
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="border-gray-200 hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <p className="text-xs text-gray-500 mb-2">About 2 minutes</p>
+              <h3 className="text-base font-semibold text-gray-900 mb-2">Create a new contact</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                See all their details and interactions you've had in one place.
+              </p>
+              <Button className="bg-gray-900 hover:bg-gray-800 text-white">
+                Create contact
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-gray-200 hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <p className="text-xs text-gray-500 mb-2">About 3 minutes</p>
+              <h3 className="text-base font-semibold text-gray-900 mb-2">Set up your deals pipeline</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                In three easy steps, you'll hit the ground running with a custom deals pipeline.
+              </p>
+              <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
+                Set up deals pipeline
+              </Button>
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Tasks */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Check className="h-5 w-5 text-gray-700" />
+            <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="h-8 w-8 rounded-md flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors">
+              <Plus className="h-5 w-5" />
+            </button>
+            <div className="flex border border-gray-300 rounded-md overflow-hidden">
+              <button className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-900">Open</button>
+              <button className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Completed</button>
+            </div>
+          </div>
+        </div>
+
+        <Card className="border-gray-200">
+          <CardContent className="p-6">
+            <p className="text-sm text-gray-600 mb-3">You have no tasks today</p>
+            <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
+              <Plus className="h-4 w-4 mr-2" />
+              New Task
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Activity Feed */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-gray-700" />
+            <h2 className="text-lg font-semibold text-gray-900">Activity Feed</h2>
+          </div>
+          <button className="text-sm text-gray-600 font-medium hover:text-gray-900 flex items-center gap-1">
+            All activity types <ChevronDown className="h-4 w-4" />
+          </button>
+        </div>
+
+        <Card className="border-gray-200">
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 mb-2">
+                  Never miss a follow-up
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Connect your inbox to see when contacts open your emails, click links, reply to conversations, and more.
+                </p>
+                <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
+                  <Mail className="h-4 w-4 mr-2" />
+                  Connect your inbox
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
+                    <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
+                      <Users className="h-4 w-4 text-gray-500" />
+                    </div>
+                    <div className="flex-1 h-2 bg-gray-200 rounded"></div>
+                    <span className="text-xs text-gray-500 px-2 py-1 border border-gray-300 rounded-full">
+                      {["Reply", "Click", "Open", "Sent"][i - 1]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Activity */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Clock className="h-5 w-5 text-gray-700" />
+          <h2 className="text-lg font-semibold text-gray-900">Recent activity</h2>
+        </div>
+
+        <Card className="border-gray-200">
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium text-gray-900">Site page</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-300">Draft</span>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900">Home</h3>
+                <p className="text-xs text-gray-500">You created 18 hours ago</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -405,7 +589,7 @@ function ContentView({ posts, newsletter, schedule, selectedItem, onSelectItem }
     : null;
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto px-8 py-6">
       <div className="flex gap-6">
         {/* Sol: İçerik Listesi */}
         <div className="w-72 flex-shrink-0 space-y-2">
@@ -606,7 +790,7 @@ function ApprovalPoolView({ posts, newsletter, strategyId }: {
   );
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
+    <div className="max-w-3xl mx-auto px-8 py-6 space-y-4">
       <h2 className="text-lg font-bold text-foreground">Onay Havuzu</h2>
       {allItems.map((item) => {
         const isUpdating = updating === item.id;
@@ -673,7 +857,7 @@ function CalendarGrid({ weekDays, calendar, assets, strategyId, onSelectItem }: 
   assets: { posts: Record<string, unknown>[]; newsletter: Record<string, unknown>; schedule: Record<string, unknown>[] };
   strategyId?: string; onSelectItem?: (item: Record<string, unknown>) => void;
 }) {
-  const dayNames = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+  const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const itemsByDay: Record<number, Record<string, unknown>[]> = {};
   weekDays.forEach((d) => {
@@ -685,124 +869,46 @@ function CalendarGrid({ weekDays, calendar, assets, strategyId, onSelectItem }: 
   const hasContent = Object.keys(itemsByDay).length > 0;
 
   return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">İçerik Takvimi</h3>
-          </div>
-          {hasContent && <Badge variant="outline" className="text-[10px]">{weekDays.length} içerik</Badge>}
-        </div>
-
-        {calendar.weekThemes.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {calendar.weekThemes.map((wt, i) => (
-              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-400 border border-emerald-500/20">
-                W{typeof wt.week === "number" ? wt.week : i + 1}: {typeof wt.theme === "string" ? wt.theme : ""}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {hasContent ? (
-          <div className="grid grid-cols-7 gap-1.5">
-            {dayNames.map((name) => (
-              <div key={name} className="text-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wide py-1">
-                {name}
-              </div>
-            ))}
-            {(() => {
-              const maxDay = Math.max(...Object.keys(itemsByDay).map(Number), 28);
-              const startPad = 0; // simplified: day 1 = Monday
-              const cells: React.ReactNode[] = [];
-              for (let i = 0; i < startPad; i++) {
-                cells.push(<div key={`pad-start-${i}`} className="min-h-[80px] rounded-lg bg-muted/10" />);
-              }
-              for (let day = 1; day <= maxDay; day++) {
-                const dayItems = itemsByDay[day] || [];
-                cells.push(
-                  <div key={day} className={`min-h-[80px] rounded-lg p-1.5 border ${dayItems.length > 0 ? "bg-muted/40 border-primary/20" : "bg-muted/10 border-transparent"}`}>
-                    <span className={`text-[9px] font-bold ${dayItems.length > 0 ? "text-primary" : "text-muted-foreground/40"}`}>{day}</span>
-                    <div className="space-y-0.5 mt-1">
-                      {dayItems.slice(0, 2).map((item, idx) => (
-                        <div key={idx} className="text-[7px] px-1 py-0.5 rounded truncate bg-blue-600/20 text-blue-300 border border-blue-500/20 leading-tight cursor-pointer hover:bg-blue-600/40"
-                          onClick={() => onSelectItem?.(item)}>
-                          {typeof item.content_title === "string" ? item.content_title : typeof item.title === "string" ? item.title : "Content"}
-                        </div>
-                      ))}
-                      {dayItems.length > 2 && (
-                        <span className="text-[7px] text-muted-foreground">+{dayItems.length - 2} daha</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-              return cells;
-            })()}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <Calendar className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-xs text-muted-foreground">Henüz takvim oluşturulmamış</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ScheduleCard({ schedule, strategyId }: { schedule: Record<string, unknown>[]; strategyId?: string }) {
-  const [published, setPublished] = useState<Record<number, boolean>>({});
-  const [pubStatus, setPubStatus] = useState<Record<number, string>>({});
-  const [publishing, setPublishing] = useState<number | null>(null);
-
-  async function handlePublish(index: number) {
-    if (!strategyId || publishing !== null) return;
-    setPublishing(index);
-    try {
-      const res = await publishScheduleItem(strategyId, index);
-      setPublished((prev) => ({ ...prev, [index]: true }));
-      setPubStatus((prev) => ({ ...prev, [index]: res.status }));
-    } catch { /* ignore */ }
-    finally { setPublishing(null); }
-  }
-
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Target className="h-4 w-4 text-emerald-400" />
-          <h3 className="text-sm font-semibold text-foreground">Yayın Takvimi</h3>
-        </div>
-        <div className="space-y-1.5">
-          {schedule.map((s, i) => {
-            const isPublishing = publishing === i;
-            const done = published[i];
-            const status = pubStatus[i];
-            return (
-            <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
-              <span className="text-[10px] font-semibold text-foreground w-14">{typeof s.day === "string" ? s.day : ""}</span>
-              <Badge variant="outline" className="text-[9px] h-5">{typeof s.platform === "string" ? s.platform : ""}</Badge>
-              <span className="text-[10px] text-muted-foreground flex-1 truncate">{typeof s.content === "string" ? s.content : ""}</span>
-              <span className="text-[9px] text-muted-foreground/60">{typeof s.time === "string" ? s.time : ""}</span>
-              {done ? (
-                <span className={`text-[9px] ${status === "published" ? "text-emerald-400" : "text-red-400"}`}>
-                  {status === "published" ? "Yayında" : "Hata"}
-                </span>
-              ) : (
-                <Button size="sm" variant="ghost" className="h-6 text-[9px] gap-1"
-                  disabled={isPublishing || !strategyId}
-                  onClick={() => handlePublish(i)}>
-                  {isPublishing ? "..." : "Yayınla"}
-                </Button>
-              )}
+    <div className="p-4">
+      {hasContent ? (
+        <div className="grid grid-cols-7 gap-1">
+          {dayNames.map((name) => (
+            <div key={name} className="text-center text-xs font-semibold text-gray-500 uppercase tracking-wide py-2">
+              {name}
             </div>
-            );
-          })}
+          ))}
+          {(() => {
+            const maxDay = Math.max(...Object.keys(itemsByDay).map(Number), 28);
+            const cells: React.ReactNode[] = [];
+            for (let day = 1; day <= maxDay; day++) {
+              const dayItems = itemsByDay[day] || [];
+              cells.push(
+                <div key={day} className={`min-h-[100px] rounded-md p-1.5 border ${dayItems.length > 0 ? "bg-gray-50 border-gray-200" : "border-transparent"}`}>
+                  <span className={`text-xs font-semibold ${dayItems.length > 0 ? "text-gray-900" : "text-gray-400"}`}>{day}</span>
+                  <div className="space-y-0.5 mt-1">
+                    {dayItems.slice(0, 2).map((item, idx) => (
+                      <div key={idx} className="text-[10px] px-1.5 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 leading-tight cursor-pointer hover:bg-blue-100"
+                        onClick={() => onSelectItem?.(item)}>
+                        {typeof item.content_title === "string" ? item.content_title : typeof item.title === "string" ? item.title : "Content"}
+                      </div>
+                    ))}
+                    {dayItems.length > 2 && (
+                      <span className="text-[10px] text-gray-500">+{dayItems.length - 2} more</span>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+            return cells;
+          })()}
         </div>
-      </CardContent>
-    </Card>
+      ) : (
+        <div className="text-center py-12">
+          <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-sm text-gray-500">No calendar created yet</p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -824,7 +930,7 @@ function SettingsView({ companyId }: { companyId: string }) {
   if (loading) return <div className="flex items-center justify-center h-32"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto px-8 py-6 space-y-6">
       <h2 className="text-lg font-bold text-foreground">Ayarlar</h2>
       <Card><CardContent className="p-5 space-y-4">
         <div><label className="text-sm font-medium text-foreground mb-1 block">Product Name</label>
@@ -851,5 +957,14 @@ function SettingsView({ companyId }: { companyId: string }) {
         } catch {}
       }}>Save Settings</Button>
     </div>
+  );
+}
+
+function Clock({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
   );
 }

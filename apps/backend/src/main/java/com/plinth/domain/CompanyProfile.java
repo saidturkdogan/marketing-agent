@@ -7,6 +7,8 @@ import java.util.StringJoiner;
 public record CompanyProfile(
         String companyId,
         String name,
+        String role,
+        String companySize,
         String websiteUrl,
         String logoUrl,
         String industry,
@@ -27,6 +29,8 @@ public record CompanyProfile(
         return Map.ofEntries(
                 Map.entry("company_id", safe(companyId)),
                 Map.entry("name", safe(name)),
+                Map.entry("role", safe(role)),
+                Map.entry("company_size", safe(companySize)),
                 Map.entry("website_url", safe(websiteUrl)),
                 Map.entry("logo_url", safe(logoUrl)),
                 Map.entry("industry", safe(industry)),
@@ -48,6 +52,8 @@ public record CompanyProfile(
     public String toPromptContext() {
         StringJoiner joiner = new StringJoiner("\n");
         joiner.add("Company: " + safe(name));
+        addIfPresent(joiner, "User Role", role);
+        addIfPresent(joiner, "Company Size", companySize);
         addIfPresent(joiner, "Product Name", productName);
         addIfPresent(joiner, "Core Value Proposition", coreValueProp);
         addIfPresent(joiner, "Website", websiteUrl);
