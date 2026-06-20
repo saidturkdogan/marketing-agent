@@ -1,19 +1,19 @@
 package com.plinth.service;
 
 import com.plinth.domain.CampaignState;
-import com.plinth.workflow.CampaignWorkflowRunner;
+import com.plinth.workflow.GoalDrivenOrchestrator;
 import org.springframework.stereotype.Service;
 
 @Service
 public class JavaAiOrchestratorService {
 
-    private final CampaignWorkflowRunner workflowRunner;
+    private final GoalDrivenOrchestrator orchestrator;
 
-    public JavaAiOrchestratorService(CampaignWorkflowRunner workflowRunner) {
-        this.workflowRunner = workflowRunner;
+    public JavaAiOrchestratorService(GoalDrivenOrchestrator orchestrator) {
+        this.orchestrator = orchestrator;
     }
 
     public CampaignState run(CampaignState state) {
-        return workflowRunner.run(state);
+        return orchestrator.run(state);
     }
 }

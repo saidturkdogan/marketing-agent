@@ -9,6 +9,8 @@ import com.plinth.dto.response.JobResponse;
 import com.plinth.persistence.CampaignPersistenceService;
 import com.plinth.persistence.entity.CampaignEntity;
 import com.plinth.persistence.entity.JobEntity;
+import com.plinth.persistence.entity.PublishJobEntity;
+import com.plinth.persistence.repository.PublishJobRepository;
 import com.plinth.publisher.PublishResult;
 import com.plinth.publisher.PublishService;
 import org.springframework.stereotype.Service;
@@ -25,16 +27,28 @@ public class CampaignService {
     private final JavaAiOrchestratorService javaAiOrchestratorService;
     private final CampaignPersistenceService campaignPersistenceService;
     private final PublishService publishService;
+    private final PublishQueueService publishQueueService;
+    private final PublishJobRepository publishJobRepository;
     private final CompanyService companyService;
+    private final CampaignMemoryService campaignMemoryService;
+    private final UnifiedProfileService unifiedProfileService;
 
     public CampaignService(JavaAiOrchestratorService javaAiOrchestratorService,
                            CampaignPersistenceService campaignPersistenceService,
                            PublishService publishService,
-                           CompanyService companyService) {
+                           PublishQueueService publishQueueService,
+                           PublishJobRepository publishJobRepository,
+                           CompanyService companyService,
+                           CampaignMemoryService campaignMemoryService,
+                           UnifiedProfileService unifiedProfileService) {
         this.javaAiOrchestratorService = javaAiOrchestratorService;
         this.campaignPersistenceService = campaignPersistenceService;
         this.publishService = publishService;
+        this.publishQueueService = publishQueueService;
+        this.publishJobRepository = publishJobRepository;
         this.companyService = companyService;
+        this.campaignMemoryService = campaignMemoryService;
+        this.unifiedProfileService = unifiedProfileService;
     }
 
     public CampaignResponse runCampaign(CampaignRequest request) {
@@ -50,6 +64,10 @@ public class CampaignService {
 
         CompanyProfile companyProfile = companyService.getProfile(request.companyId());
         CampaignState initial = new CampaignState(campaignId, companyProfile, request.topic(), platforms, outputs);
+
+        String memoryContext = campaignMemoryService.buildMemoryContext(request.topic(), request.companyId());
+        initial.setMemoryContext(memoryContext);
+
         campaignPersistenceService.markJobRunning(jobId, campaignId);
 
         try {
@@ -111,9 +129,17 @@ public class CampaignService {
         if (content.isBlank()) {
             throw new IllegalArgumentException("LinkedIn content not found for campaign: " + campaignId);
         }
-        PublishResult result = publishService.publishLinkedIn(content);
-        campaignPersistenceService.savePublishLog(campaignId, result, Map.of("content", content));
-        return result;
+
+        PublishJobEntity job = publishQueueService.enqueue(campaignId, "LinkedIn", content, null);
+        publishQueueService.processInternal(job.getJobId());
+
+        PublishJobEntity processed = publishJobRepository.findAll().stream()
+                .filter(j -> j.getJobId().equals(job.getJobId()))
+                .findFirst().orElse(null);
+        if (processed != null && "published".equals(processed.getStatus())) {
+            return new PublishResult("LinkedIn", "published", null, null, "published via queue");
+        }
+        return new PublishResult("LinkedIn", "queued", job.getJobId(), null, "queued for publishing");
     }
 
     @SuppressWarnings("unchecked")
@@ -137,9 +163,16 @@ public class CampaignService {
             throw new IllegalArgumentException("imageUrl is required to publish Instagram content");
         }
 
-        PublishResult result = publishService.publishInstagramImage(imageUrl, caption);
-        campaignPersistenceService.savePublishLog(campaignId, result, Map.of("caption", caption, "image_url", imageUrl));
-        return result;
+        PublishJobEntity job = publishQueueService.enqueue(campaignId, "Instagram", caption, imageUrl);
+        publishQueueService.processInternal(job.getJobId());
+
+        PublishJobEntity processed = publishJobRepository.findAll().stream()
+                .filter(j -> j.getJobId().equals(job.getJobId()))
+                .findFirst().orElse(null);
+        if (processed != null && "published".equals(processed.getStatus())) {
+            return new PublishResult("Instagram", "published", null, null, "published via queue");
+        }
+        return new PublishResult("Instagram", "queued", job.getJobId(), null, "queued for publishing");
     }
 
     @SuppressWarnings("unchecked")
@@ -159,9 +192,17 @@ public class CampaignService {
         if (content.isBlank()) {
             throw new IllegalArgumentException("Twitter content not found for campaign: " + campaignId);
         }
-        PublishResult result = publishService.publishTwitter(content);
-        campaignPersistenceService.savePublishLog(campaignId, result, Map.of("content", content));
-        return result;
+
+        PublishJobEntity job = publishQueueService.enqueue(campaignId, "Twitter", content, null);
+        publishQueueService.processInternal(job.getJobId());
+
+        PublishJobEntity processed = publishJobRepository.findAll().stream()
+                .filter(j -> j.getJobId().equals(job.getJobId()))
+                .findFirst().orElse(null);
+        if (processed != null && "published".equals(processed.getStatus())) {
+            return new PublishResult("Twitter", "published", null, null, "published via queue");
+        }
+        return new PublishResult("Twitter", "queued", job.getJobId(), null, "queued for publishing");
     }
 
     @SuppressWarnings("unchecked")

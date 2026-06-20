@@ -18,10 +18,11 @@ import {
   ThumbsUp, Plus, Building2, Moon, Sun, Monitor, Palette, RefreshCw,
 } from "lucide-react";
 
-type View = "overview" | "approval" | "settings";
+type View = "overview" | "content" | "approval" | "settings";
 
 const NAV_ITEMS: { id: View; label: string; icon: typeof BarChart3; badge?: string }[] = [
   { id: "overview", label: "Dashboard", icon: LayoutDashboard },
+  { id: "content", label: "İçerikler", icon: FileText },
   { id: "approval", label: "Onay Havuzu", icon: ThumbsUp },
   { id: "settings", label: "Ayarlar", icon: Settings },
 ];
@@ -42,6 +43,7 @@ export function DashboardPage() {
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
 
   const [view, setView] = useState<View>("overview");
+  const [selectedContent, setSelectedContent] = useState<Record<string, unknown> | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [strategyData, setStrategyData] = useState<any>(null);
   const [company, setCompany] = useState<Company | null>(null);
@@ -233,10 +235,19 @@ export function DashboardPage() {
               calendar={{ days: calendarDays, weeks: calendarWeeks, weekThemes }}
               weekDays={weekDays}
               assets={{ posts, newsletter, schedule }}
-              score={score}
               pillars={pillars}
               strategyId={dashboardData?.strategyId}
               onNewPipeline={() => navigate(`/pipeline/${companyId}`)}
+              onSelectContent={(item) => { setSelectedContent(item); setView("content"); }}
+            />
+          )}
+          {view === "content" && (
+            <ContentView
+              posts={posts}
+              newsletter={newsletter}
+              schedule={schedule}
+              selectedItem={selectedContent}
+              onSelectItem={setSelectedContent}
             />
           )}
           {view === "approval" && (
@@ -260,12 +271,12 @@ export function DashboardPage() {
 }
 
 function OverviewView({
-  companyId, company, dashboardData, strategy, calendar, weekDays, assets, score, pillars, strategyId, onNewPipeline,
+  companyId, company, dashboardData, strategy, calendar, weekDays, assets, pillars, strategyId, onNewPipeline, onSelectContent,
 }: {
   companyId?: string; company: Company | null; dashboardData: DashboardData | null;
   strategy: Record<string, unknown>; calendar: { days: Record<string, unknown>[]; weeks: Record<string, unknown>[]; weekThemes: Record<string, unknown>[] };
   weekDays: Record<string, unknown>[]; assets: { posts: Record<string, unknown>[]; newsletter: Record<string, unknown>; schedule: Record<string, unknown>[] };
-  score: number; pillars: Record<string, unknown>[]; strategyId?: string; onNewPipeline: () => void;
+  pillars: Record<string, unknown>[]; strategyId?: string; onNewPipeline: () => void; onSelectContent?: (item: Record<string, unknown>) => void;
 }) {
   const info = {
     name: company?.name || "",
@@ -276,162 +287,22 @@ function OverviewView({
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* Pipeline Status + New Button */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600"><Check className="h-3 w-3 text-white" /></div>
-            <span className="text-xs font-semibold text-emerald-400">Research</span>
-          </div>
-          <div className="w-6 h-px bg-emerald-600/40" />
-          <div className="flex items-center gap-1.5">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600"><Check className="h-3 w-3 text-white" /></div>
-            <span className="text-xs font-semibold text-emerald-400">Strategy</span>
-          </div>
-          <div className="w-6 h-px bg-emerald-600/40" />
-          <div className="flex items-center gap-1.5">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600"><Check className="h-3 w-3 text-white" /></div>
-            <span className="text-xs font-semibold text-emerald-400">Plan</span>
-          </div>
-          <div className="w-6 h-px bg-emerald-600/40" />
-          <div className="flex items-center gap-1.5">
-            <div className={`flex h-6 w-6 items-center justify-center rounded-full ${assets.posts.length > 0 ? "bg-emerald-600" : "bg-muted"}`}>
-              {assets.posts.length > 0 ? <Check className="h-3 w-3 text-white" /> : <span className="text-[9px] text-muted-foreground/60">4</span>}
-            </div>
-            <span className={`text-xs font-semibold ${assets.posts.length > 0 ? "text-emerald-400" : "text-muted-foreground/60"}`}>Assets</span>
-          </div>
-        </div>
-        <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={onNewPipeline}>
-          <RefreshCw className="h-3 w-3" /> Yeni Pipeline
-        </Button>
-      </div>
-
       {/* Company Info Bar */}
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
         <span className="font-semibold text-foreground">{info.name}</span>
         {info.industry && <><Separator orientation="vertical" className="h-4" /><span>{info.industry}</span></>}
         {info.website && <><Separator orientation="vertical" className="h-4" /><span className="truncate max-w-[200px]">{info.website}</span></>}
-        {score > 0 && <><Separator orientation="vertical" className="h-4" /><span className="text-primary font-semibold">Score: {score}/100</span></>}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: This Week + Pending */}
-        <div className="lg:col-span-2 space-y-6">
-
-          {/* This Week's Content */}
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-primary" />
-                  <h3 className="text-sm font-semibold text-foreground">Bu Hafta Yayınlanacaklar</h3>
-                </div>
-                <Badge variant="outline" className="text-[10px]">{weekDays.length} içerik</Badge>
-              </div>
-              {weekDays.length > 0 ? (
-                <div className="space-y-2">
-                  {weekDays.map((d, i) => (
-                    <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50 hover:bg-muted/80 transition-colors">
-                      <div className="flex flex-col items-center min-w-[2.2rem]">
-                        <span className="text-xs font-bold text-foreground">{typeof d.day === "number" ? d.day : i + 1}</span>
-                        <span className="text-[9px] text-muted-foreground">Gün</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground truncate">
-                          {typeof d.content_title === "string" ? d.content_title : typeof d.title === "string" ? d.title : "Content piece"}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="px-1.5 py-0.5 rounded text-[9px] bg-blue-600/10 text-blue-400 font-medium">
-                            {typeof d.content_type === "string" ? d.content_type : typeof d.type === "string" ? d.type : "post"}
-                          </span>
-                          <span className="px-1.5 py-0.5 rounded text-[9px] bg-violet-600/10 text-violet-400">
-                            {typeof d.platform === "string" ? d.platform : "linkedin"}
-                          </span>
-                        </div>
-                      </div>
-                      <Button size="sm" variant="ghost" className="h-7 text-[10px] gap-1 flex-shrink-0">
-                        <Check className="h-3 w-3" /> Onayla
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <Calendar className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-xs text-muted-foreground">Henüz takvim oluşturulmamış</p>
-                  <Button size="sm" variant="outline" className="mt-3 h-8 text-xs" onClick={onNewPipeline}>
-                    Pipeline Başlat
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Pending Approvals */}
-          {assets.posts.length > 0 && (
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <ThumbsUp className="h-4 w-4 text-amber-400" />
-                  <h3 className="text-sm font-semibold text-foreground">Onay Bekleyenler</h3>
-                  <Badge variant="outline" className="text-amber-400 border-amber-500/30 bg-amber-500/10 ml-auto">{assets.posts.length + (assets.newsletter?.subject ? 1 : 0)} adet</Badge>
-                </div>
-                <div className="space-y-2">
-                  {assets.posts.map((post, i) => (
-                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg border-l-4 border-l-amber-500 bg-muted/30">
-                      <Linkedin className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-foreground">{typeof post.title === "string" ? post.title : `LinkedIn Post ${i + 1}`}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
-                          {typeof post.body === "string" ? post.body.substring(0, 150) : ""}...
-                        </p>
-                        <div className="flex gap-2 mt-2">
-                          <Button size="sm" variant="default" className="h-7 text-[10px]"><Check className="h-3 w-3 mr-1" /> Onayla</Button>
-                          <Button size="sm" variant="outline" className="h-7 text-[10px]"><X className="h-3 w-3 mr-1" /> Reddet</Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {assets.newsletter?.subject ? (
-                    <div className="flex items-start gap-3 p-3 rounded-lg border-l-4 border-l-amber-500 bg-muted/30">
-                      <Mail className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-foreground">{typeof assets.newsletter.subject === "string" ? assets.newsletter.subject : "Newsletter"}</p>
-                        <div className="flex gap-2 mt-2">
-                          <Button size="sm" variant="default" className="h-7 text-[10px]"><Check className="h-3 w-3 mr-1" /> Onayla</Button>
-                          <Button size="sm" variant="outline" className="h-7 text-[10px]"><X className="h-3 w-3 mr-1" /> Reddet</Button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Publishing Schedule */}
-          {assets.schedule.length > 0 && (
-            <ScheduleCard schedule={assets.schedule} strategyId={strategyId} />
-          )}
+      {/* Calendar View */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Calendar Grid */}
+        <div className="lg:col-span-3 space-y-4">
+          <CalendarGrid weekDays={weekDays} calendar={calendar} assets={assets} strategyId={strategyId} onSelectItem={onSelectContent} />
         </div>
 
         {/* Right: Strategy Summary */}
         <div className="space-y-6">
-          {/* Score Card */}
-          <Card>
-            <CardContent className="p-5 text-center">
-              <p className="text-xs text-muted-foreground mb-1">Marketing Score</p>
-              <p className={`text-4xl font-bold ${score >= 60 ? "text-emerald-400" : score >= 40 ? "text-amber-400" : "text-red-400"}`}>
-                {Math.round(score)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">/ 100</p>
-              <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden">
-                <div className={`h-full rounded-full transition-all ${score >= 60 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-red-500"}`}
-                  style={{ width: `${score}%` }} />
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Strategic Pillars */}
           {pillars.length > 0 && (
             <Card>
@@ -491,6 +362,177 @@ function OverviewView({
               </div>
             </CardContent>
           </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContentView({ posts, newsletter, schedule, selectedItem, onSelectItem }: {
+  posts: Record<string, unknown>[];
+  newsletter: Record<string, unknown>;
+  schedule: Record<string, unknown>[];
+  selectedItem: Record<string, unknown> | null;
+  onSelectItem: (item: Record<string, unknown> | null) => void;
+}) {
+  const allItems = [
+    ...posts.map((p, i) => ({
+      ...p,
+      _id: `post-${i}`,
+      _type: "LinkedIn Post" as const,
+      _icon: Linkedin,
+      _iconColor: "text-blue-400",
+    })),
+    ...(newsletter?.subject ? [{
+      ...newsletter,
+      _id: "newsletter",
+      _type: "Newsletter" as const,
+      _icon: Mail,
+      _iconColor: "text-amber-400",
+    }] : []),
+  ] as Record<string, unknown>[];
+
+  if (allItems.length === 0) return (
+    <div className="text-center py-16">
+      <FileText className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+      <p className="text-sm text-muted-foreground">Henüz içerik oluşturulmamış</p>
+      <p className="text-xs text-muted-foreground/60 mt-1">Pipeline'dan asset oluşturunca burada görünecek</p>
+    </div>
+  );
+
+  const detailItem = selectedItem
+    ? allItems.find((i) => i._id === selectedItem._id)
+    : null;
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      <div className="flex gap-6">
+        {/* Sol: İçerik Listesi */}
+        <div className="w-72 flex-shrink-0 space-y-2">
+          <h2 className="text-sm font-bold text-foreground mb-3">İçerikler</h2>
+          {allItems.map((item) => {
+            const Icon = item._icon as typeof FileText;
+            const isSelected = detailItem?._id === item._id;
+            return (
+              <button key={item._id as string}
+                onClick={() => onSelectItem(isSelected ? null : item)}
+                className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                  isSelected ? "bg-muted/60 border-primary/30" : "bg-muted/20 border-transparent hover:bg-muted/40"
+                }`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon className={`h-3.5 w-3.5 ${item._iconColor as string}`} />
+                  <span className="text-xs font-semibold text-foreground">{item._type as string}</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground line-clamp-2">
+                  {typeof item.title === "string" ? item.title : typeof item.subject === "string" ? item.subject : "İçerik"}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sağ: Detay */}
+        <div className="flex-1">
+          {detailItem ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const Icon = detailItem._icon as typeof FileText;
+                  return <Icon className={`h-5 w-5 ${detailItem._iconColor as string}`} />;
+                })()}
+                <h3 className="text-lg font-bold text-foreground">
+                  {typeof detailItem.title === "string" ? detailItem.title : typeof detailItem.subject === "string" ? detailItem.subject : "İçerik Detayı"}
+                </h3>
+              </div>
+
+              {/* Media */}
+              {typeof detailItem.imageUrl === "string" && detailItem.imageUrl && (
+                <div className="rounded-xl overflow-hidden border border-muted">
+                  <img src={detailItem.imageUrl} alt="Content visual"
+                    className="w-full h-48 object-cover" />
+                </div>
+              )}
+              {typeof detailItem.videoUrl === "string" && detailItem.videoUrl && (
+                <div className="rounded-xl overflow-hidden border border-muted">
+                  <video src={detailItem.videoUrl} controls className="w-full h-48 object-cover" />
+                </div>
+              )}
+
+              {/* Body */}
+              <Card>
+                <CardContent className="p-4">
+                  {typeof detailItem.body === "string" ? (
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{detailItem.body}</p>
+                  ) : typeof detailItem.intro === "string" ? (
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{detailItem.intro}</p>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              {/* Hashtags */}
+              {Array.isArray(detailItem.hashtags) && (detailItem.hashtags as string[]).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {(detailItem.hashtags as string[]).map((tag, i) => (
+                    <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-blue-600/10 text-blue-400 border border-blue-500/20">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Newsletter sections */}
+              {Array.isArray(detailItem.sections) && (detailItem.sections as Record<string, unknown>[]).length > 0 && (
+                <div className="space-y-3">
+                  {(detailItem.sections as Record<string, unknown>[]).map((sec, i) => (
+                    <Card key={i}>
+                      <CardContent className="p-4">
+                        <h4 className="text-sm font-semibold text-foreground mb-1">
+                          {typeof sec.heading === "string" ? sec.heading : ""}
+                        </h4>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                          {typeof sec.body === "string" ? sec.body : ""}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {/* CTA */}
+              {typeof detailItem.cta === "string" && detailItem.cta && (
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-sm font-semibold text-primary">{detailItem.cta}</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Publishing schedule items for this content */}
+              {schedule.length > 0 && (
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Yayın Takvimi</h4>
+                    <div className="space-y-1">
+                      {schedule.map((s, i) => (
+                        <div key={i} className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <span>{typeof s.day === "string" ? s.day : ""}</span>
+                          <Badge variant="outline" className="text-[9px] h-4">{typeof s.platform === "string" ? s.platform : ""}</Badge>
+                          <span className="flex-1 truncate">{typeof s.time === "string" ? s.time : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-64 text-muted-foreground">
+              <div className="text-center">
+                <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">Detayını görmek için soldan bir içerik seçin</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -622,6 +664,91 @@ function ApprovalPoolView({ posts, newsletter, strategyId }: {
         );
       })}
     </div>
+  );
+}
+
+function CalendarGrid({ weekDays, calendar, assets, strategyId, onSelectItem }: {
+  weekDays: Record<string, unknown>[];
+  calendar: { days: Record<string, unknown>[]; weeks: Record<string, unknown>[]; weekThemes: Record<string, unknown>[] };
+  assets: { posts: Record<string, unknown>[]; newsletter: Record<string, unknown>; schedule: Record<string, unknown>[] };
+  strategyId?: string; onSelectItem?: (item: Record<string, unknown>) => void;
+}) {
+  const dayNames = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+
+  const itemsByDay: Record<number, Record<string, unknown>[]> = {};
+  weekDays.forEach((d) => {
+    const dayNum = typeof d.day === "number" ? d.day : 0;
+    if (!itemsByDay[dayNum]) itemsByDay[dayNum] = [];
+    itemsByDay[dayNum].push(d);
+  });
+
+  const hasContent = Object.keys(itemsByDay).length > 0;
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">İçerik Takvimi</h3>
+          </div>
+          {hasContent && <Badge variant="outline" className="text-[10px]">{weekDays.length} içerik</Badge>}
+        </div>
+
+        {calendar.weekThemes.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {calendar.weekThemes.map((wt, i) => (
+              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-400 border border-emerald-500/20">
+                W{typeof wt.week === "number" ? wt.week : i + 1}: {typeof wt.theme === "string" ? wt.theme : ""}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {hasContent ? (
+          <div className="grid grid-cols-7 gap-1.5">
+            {dayNames.map((name) => (
+              <div key={name} className="text-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wide py-1">
+                {name}
+              </div>
+            ))}
+            {(() => {
+              const maxDay = Math.max(...Object.keys(itemsByDay).map(Number), 28);
+              const startPad = 0; // simplified: day 1 = Monday
+              const cells: React.ReactNode[] = [];
+              for (let i = 0; i < startPad; i++) {
+                cells.push(<div key={`pad-start-${i}`} className="min-h-[80px] rounded-lg bg-muted/10" />);
+              }
+              for (let day = 1; day <= maxDay; day++) {
+                const dayItems = itemsByDay[day] || [];
+                cells.push(
+                  <div key={day} className={`min-h-[80px] rounded-lg p-1.5 border ${dayItems.length > 0 ? "bg-muted/40 border-primary/20" : "bg-muted/10 border-transparent"}`}>
+                    <span className={`text-[9px] font-bold ${dayItems.length > 0 ? "text-primary" : "text-muted-foreground/40"}`}>{day}</span>
+                    <div className="space-y-0.5 mt-1">
+                      {dayItems.slice(0, 2).map((item, idx) => (
+                        <div key={idx} className="text-[7px] px-1 py-0.5 rounded truncate bg-blue-600/20 text-blue-300 border border-blue-500/20 leading-tight cursor-pointer hover:bg-blue-600/40"
+                          onClick={() => onSelectItem?.(item)}>
+                          {typeof item.content_title === "string" ? item.content_title : typeof item.title === "string" ? item.title : "Content"}
+                        </div>
+                      ))}
+                      {dayItems.length > 2 && (
+                        <span className="text-[7px] text-muted-foreground">+{dayItems.length - 2} daha</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+              return cells;
+            })()}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Calendar className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+            <p className="text-xs text-muted-foreground">Henüz takvim oluşturulmamış</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

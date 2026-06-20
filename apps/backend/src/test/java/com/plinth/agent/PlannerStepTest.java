@@ -2,9 +2,13 @@ package com.plinth.agent;
 
 import com.plinth.domain.CampaignState;
 import com.plinth.domain.CompanyProfile;
+import com.plinth.domain.AgentDecision;
 import com.plinth.llm.LlmService;
 import com.plinth.prompt.PromptCatalog;
 import com.plinth.service.AgentIdentityService;
+import com.plinth.service.KnowledgeBaseService;
+import com.plinth.service.ReasoningService;
+import com.plinth.service.UnifiedProfileService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,12 +31,22 @@ class PlannerStepTest {
     @Mock
     private AgentIdentityService identityService;
 
+    @Mock
+    private ReasoningService reasoningService;
+
+    @Mock
+    private UnifiedProfileService unifiedProfileService;
+
+    @Mock
+    private KnowledgeBaseService knowledgeBaseService;
+
     private final PromptCatalog prompts = new PromptCatalog();
     private PlannerStep step;
 
     @BeforeEach
     void setUp() {
-        step = new PlannerStep(llmService, prompts, identityService);
+        step = new PlannerStep(llmService, prompts, identityService, reasoningService,
+                unifiedProfileService, knowledgeBaseService);
     }
 
     @Test
@@ -47,8 +61,11 @@ class PlannerStepTest {
 
     @Test
     void shouldPopulatePlanAndCompleteStep() {
-        when(llmService.generate(anyString(), anyString())).thenReturn("Plan draft content");
+        when(reasoningService.reason(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(new AgentDecision("Test reasoning", "Plan draft content", 0.85));
         when(identityService.buildIdentityContext(any())).thenReturn("<brand_identity><product><name>TestCo</name></product></brand_identity>");
+        when(unifiedProfileService.buildUnifiedContext(anyString())).thenReturn("<unified_profile><company><name>TestCo</name></company></unified_profile>");
+        when(knowledgeBaseService.buildKnowledgeContext(anyString())).thenReturn("");
 
         CompanyProfile profile = new CompanyProfile(
                 "c1", "TestCo", "https://test.co", null, "Tech",

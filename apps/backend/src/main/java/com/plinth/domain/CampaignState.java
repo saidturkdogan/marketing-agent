@@ -16,8 +16,11 @@ public class CampaignState {
     private final Map<String, Object> plan;
     private final Map<String, Object> assets;
     private final List<String> completedSteps;
+    private final List<String> skippedSteps;
     private volatile double performanceScore = 0.0;
     private volatile String status = "running";
+    private CampaignGoal goal;
+    private String memoryContext;
 
     public CampaignState(String campaignId, CompanyProfile companyProfile, String topic, List<String> platforms, List<String> outputs) {
         this.campaignId = campaignId;
@@ -28,6 +31,7 @@ public class CampaignState {
         this.plan = new LinkedHashMap<>();
         this.assets = new ConcurrentHashMap<>();
         this.completedSteps = Collections.synchronizedList(new ArrayList<>());
+        this.skippedSteps = Collections.synchronizedList(new ArrayList<>());
     }
 
     public String getCampaignId() {
@@ -106,5 +110,32 @@ public class CampaignState {
 
     public void completeStep(String stepName) {
         completedSteps.add(stepName);
+    }
+
+    public void skipStep(String stepName) {
+        skippedSteps.add(stepName);
+    }
+
+    public boolean hasCompleted(String stepName) {
+        return completedSteps.contains(stepName);
+    }
+
+    public boolean wasSkipped(String stepName) {
+        return skippedSteps.contains(stepName);
+    }
+
+    public CampaignGoal getGoal() { return goal; }
+    public void setGoal(CampaignGoal goal) { this.goal = goal; }
+
+    public String getMemoryContext() { return memoryContext; }
+    public void setMemoryContext(String memoryContext) { this.memoryContext = memoryContext; }
+
+    public List<String> getSkippedSteps() { return skippedSteps; }
+
+    public boolean isGoalAchieved() {
+        if ("failed".equals(status) || "completed".equals(status) || "completed_with_errors".equals(status)) {
+            return true;
+        }
+        return false;
     }
 }

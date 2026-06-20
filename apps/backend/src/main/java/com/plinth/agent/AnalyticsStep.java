@@ -1,14 +1,19 @@
 package com.plinth.agent;
 
+import com.plinth.domain.AgentDecision;
 import com.plinth.domain.CampaignState;
 import com.plinth.llm.LlmService;
 import com.plinth.prompt.PromptCatalog;
 import com.plinth.rag.RagService;
 import com.plinth.service.AgentIdentityService;
+import com.plinth.service.CampaignMemoryService;
+import com.plinth.service.KnowledgeBaseService;
+import com.plinth.service.ReasoningService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Component
@@ -20,12 +25,22 @@ public class AnalyticsStep implements AgentStep {
     private final PromptCatalog prompts;
     private final RagService ragService;
     private final AgentIdentityService identityService;
+    private final ReasoningService reasoningService;
+    private final CampaignMemoryService campaignMemoryService;
+    private final KnowledgeBaseService knowledgeBaseService;
 
-    public AnalyticsStep(LlmService llmService, PromptCatalog prompts, RagService ragService, AgentIdentityService identityService) {
+    public AnalyticsStep(LlmService llmService, PromptCatalog prompts, RagService ragService,
+                         AgentIdentityService identityService,
+                         ReasoningService reasoningService,
+                         CampaignMemoryService campaignMemoryService,
+                         KnowledgeBaseService knowledgeBaseService) {
         this.llmService = llmService;
         this.prompts = prompts;
         this.ragService = ragService;
         this.identityService = identityService;
+        this.reasoningService = reasoningService;
+        this.campaignMemoryService = campaignMemoryService;
+        this.knowledgeBaseService = knowledgeBaseService;
     }
 
     @Override
@@ -42,19 +57,31 @@ public class AnalyticsStep implements AgentStep {
     public void execute(CampaignState state) {
         String assetsSummary = summarizeAssets(state.getAssets());
         String identityContext = identityService.buildIdentityContext(state.getCompanyProfile());
-        String promptInput = "Campaign assets: " + assetsSummary
-                + "\n\nEvaluate the campaign quality on a scale of 0.0 to 1.0. "
-                + "Output your score on a separate line in the format 'SCORE: X.XX' (e.g., 'SCORE: 0.85'). "
-                + "Then provide concise learnings and recommendations.";
-        String learnings = llmService.generate(prompts.analytics(identityContext), promptInput);
-        double score = parseScore(learnings, assetsSummary);
 
+        AgentDecision decision = reasoningService.reason(
+                prompts.analytics(identityContext),
+                "Campaign assets: " + assetsSummary
+                        + "\n\nEvaluate the campaign quality on a scale of 0.0 to 1.0. "
+                        + "Output your score on a separate line in the format 'SCORE: X.XX' (e.g., 'SCORE: 0.85'). "
+                        + "Then provide concise learnings and recommendations.\n"
+                        + "Also extract: what worked well, what could be improved, what to repeat next time.",
+                name(),
+                state.getCampaignId()
+        );
+
+        double score = parseScore(decision.answer(), assetsSummary);
         state.setPerformanceScore(score);
+
         state.putAsset("analytics", Map.of(
                 "performance_score", score,
-                "learnings", learnings
+                "reasoning", decision.reasoning(),
+                "confidence", decision.confidence(),
+                "learnings", decision.answer()
         ));
+
         storeToRagIfQualityMet(state, score);
+        campaignMemoryService.storeCampaignAsMemory(state);
+        knowledgeBaseService.ingestCampaignLearning(state);
         state.completeStep(name());
     }
 

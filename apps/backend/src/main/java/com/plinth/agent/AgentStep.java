@@ -6,4 +6,12 @@ public interface AgentStep {
     String name();
     int order();
     void execute(CampaignState state);
+
+    default boolean shouldRun(CampaignState state) {
+        return !state.hasCompleted(name());
+    }
+
+    default boolean isEssential() {
+        return false;
+    }
 }
