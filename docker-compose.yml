@@ -30,6 +30,7 @@ services:
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-sk_test_5910fCaeKkERofMXdKhd9anvd3VjOsTYPv4CZyypAH}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       GOOGLE_MODEL: ${GOOGLE_MODEL:-gemini-2.0-flash}
+      GOOGLE_IMAGE_MODEL: ${GOOGLE_IMAGE_MODEL:-gemini-2.5-flash-image}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-qwen3-embedding-8b}
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://api.openai.com/v1}
@@ -50,6 +51,7 @@ services:
       TWITTER_SCREEN_NAME: ${TWITTER_SCREEN_NAME:-Static Token}
       TWITTER_CALLBACK_URL: ${TWITTER_CALLBACK_URL:-http://localhost:8080/api/twitter/callback}
       TWITTER_FRONTEND_REDIRECT: ${TWITTER_FRONTEND_REDIRECT:-http://localhost:5173/dashboard}
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
     ports:
       - "8080:8080"
     depends_on:

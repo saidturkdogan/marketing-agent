@@ -9,4 +9,6 @@ public interface DecisionLogRepository extends JpaRepository<DecisionLogEntity, 
     List<DecisionLogEntity> findByCampaignIdOrderByCreatedAtAsc(String campaignId);
 
     List<DecisionLogEntity> findByCampaignIdAndStepNameOrderByCreatedAtAsc(String campaignId, String stepName);
+
+    List<DecisionLogEntity> findTop50ByCampaignIdStartingWithOrderByCreatedAtDesc(String campaignIdPrefix);
 }

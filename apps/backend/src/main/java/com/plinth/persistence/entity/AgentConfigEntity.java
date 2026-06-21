@@ -55,6 +55,27 @@ public class AgentConfigEntity {
     @Column(name = "risk_threshold", nullable = false, length = 30)
     private String riskThreshold = "warn_requires_approval";
 
+    @Column(name = "max_content_retries", nullable = false)
+    private int maxContentRetries = 2;
+
+    @Column(name = "min_confidence_to_autopublish", nullable = false)
+    private double minConfidenceToAutopublish = 0.7;
+
+    @Column(name = "llm_budget_usd_per_week", nullable = false)
+    private double llmBudgetUsdPerWeek = 5.0;
+
+    @Column(name = "llm_spend_usd_this_week", nullable = false)
+    private double llmSpendUsdThisWeek = 0;
+
+    @Column(name = "x_api_budget_credits_per_week", nullable = false)
+    private int xApiBudgetCreditsPerWeek = 100;
+
+    @Column(name = "x_credits_used_this_week", nullable = false)
+    private int xCreditsUsedThisWeek = 0;
+
+    @Column(name = "budget_week_start")
+    private OffsetDateTime budgetWeekStart;
+
     @Column(name = "last_run_at")
     private OffsetDateTime lastRunAt;
 
@@ -107,6 +128,20 @@ public class AgentConfigEntity {
     public void setTimezone(String timezone) { this.timezone = timezone; }
     public String getRiskThreshold() { return riskThreshold; }
     public void setRiskThreshold(String riskThreshold) { this.riskThreshold = riskThreshold; }
+    public int getMaxContentRetries() { return maxContentRetries; }
+    public void setMaxContentRetries(int maxContentRetries) { this.maxContentRetries = maxContentRetries; }
+    public double getMinConfidenceToAutopublish() { return minConfidenceToAutopublish; }
+    public void setMinConfidenceToAutopublish(double minConfidenceToAutopublish) { this.minConfidenceToAutopublish = minConfidenceToAutopublish; }
+    public double getLlmBudgetUsdPerWeek() { return llmBudgetUsdPerWeek; }
+    public void setLlmBudgetUsdPerWeek(double llmBudgetUsdPerWeek) { this.llmBudgetUsdPerWeek = llmBudgetUsdPerWeek; }
+    public double getLlmSpendUsdThisWeek() { return llmSpendUsdThisWeek; }
+    public void setLlmSpendUsdThisWeek(double llmSpendUsdThisWeek) { this.llmSpendUsdThisWeek = llmSpendUsdThisWeek; }
+    public int getXApiBudgetCreditsPerWeek() { return xApiBudgetCreditsPerWeek; }
+    public void setXApiBudgetCreditsPerWeek(int xApiBudgetCreditsPerWeek) { this.xApiBudgetCreditsPerWeek = xApiBudgetCreditsPerWeek; }
+    public int getXCreditsUsedThisWeek() { return xCreditsUsedThisWeek; }
+    public void setXCreditsUsedThisWeek(int xCreditsUsedThisWeek) { this.xCreditsUsedThisWeek = xCreditsUsedThisWeek; }
+    public OffsetDateTime getBudgetWeekStart() { return budgetWeekStart; }
+    public void setBudgetWeekStart(OffsetDateTime budgetWeekStart) { this.budgetWeekStart = budgetWeekStart; }
     public OffsetDateTime getLastRunAt() { return lastRunAt; }
     public void setLastRunAt(OffsetDateTime lastRunAt) { this.lastRunAt = lastRunAt; }
     public String getLastRunStatus() { return lastRunStatus; }

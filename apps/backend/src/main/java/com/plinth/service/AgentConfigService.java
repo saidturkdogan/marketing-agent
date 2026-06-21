@@ -21,6 +21,7 @@ public class AgentConfigService {
     private final TwitterAuthService twitterAuthService;
     private final GmailAuthService gmailAuthService;
     private final GoogleCalendarAuthService calendarAuthService;
+    private final AgentBudgetService agentBudgetService;
 
     public AgentConfigService(AgentConfigRepository configRepository,
                               ContentRepository contentRepository,
@@ -28,7 +29,8 @@ public class AgentConfigService {
                               AuthUtils authUtils,
                               TwitterAuthService twitterAuthService,
                               GmailAuthService gmailAuthService,
-                              GoogleCalendarAuthService calendarAuthService) {
+                              GoogleCalendarAuthService calendarAuthService,
+                              AgentBudgetService agentBudgetService) {
         this.configRepository = configRepository;
         this.contentRepository = contentRepository;
         this.approvalRepository = approvalRepository;
@@ -36,6 +38,7 @@ public class AgentConfigService {
         this.twitterAuthService = twitterAuthService;
         this.gmailAuthService = gmailAuthService;
         this.calendarAuthService = calendarAuthService;
+        this.agentBudgetService = agentBudgetService;
     }
 
     @Transactional
@@ -84,6 +87,18 @@ public class AgentConfigService {
         if (updates.containsKey("riskThreshold")) {
             config.setRiskThreshold(String.valueOf(updates.get("riskThreshold")));
         }
+        if (updates.containsKey("maxContentRetries")) {
+            config.setMaxContentRetries(((Number) updates.get("maxContentRetries")).intValue());
+        }
+        if (updates.containsKey("minConfidenceToAutopublish")) {
+            config.setMinConfidenceToAutopublish(((Number) updates.get("minConfidenceToAutopublish")).doubleValue());
+        }
+        if (updates.containsKey("llmBudgetUsdPerWeek")) {
+            config.setLlmBudgetUsdPerWeek(((Number) updates.get("llmBudgetUsdPerWeek")).doubleValue());
+        }
+        if (updates.containsKey("xApiBudgetCreditsPerWeek")) {
+            config.setXApiBudgetCreditsPerWeek(((Number) updates.get("xApiBudgetCreditsPerWeek")).intValue());
+        }
         return configRepository.save(config);
     }
 
@@ -101,6 +116,12 @@ public class AgentConfigService {
         map.put("quietHoursEnd", config.getQuietHoursEnd());
         map.put("timezone", config.getTimezone());
         map.put("riskThreshold", config.getRiskThreshold());
+        map.put("maxContentRetries", config.getMaxContentRetries());
+        map.put("minConfidenceToAutopublish", config.getMinConfidenceToAutopublish());
+        map.put("llmBudgetUsdPerWeek", config.getLlmBudgetUsdPerWeek());
+        map.put("llmSpendUsdThisWeek", config.getLlmSpendUsdThisWeek());
+        map.put("xApiBudgetCreditsPerWeek", config.getXApiBudgetCreditsPerWeek());
+        map.put("xCreditsUsedThisWeek", config.getXCreditsUsedThisWeek());
         map.put("lastRunAt", config.getLastRunAt() != null ? config.getLastRunAt().toString() : null);
         map.put("lastRunStatus", config.getLastRunStatus());
         map.put("lastRunMessage", config.getLastRunMessage());
@@ -122,6 +143,7 @@ public class AgentConfigService {
         status.put("twitterConnected", twitterAuthService.isConnected(companyId));
         status.put("gmailConnected", gmailAuthService.isConnected(companyId));
         status.put("calendarConnected", calendarAuthService.isConnected(companyId));
+        status.putAll(agentBudgetService.budgetStatus(companyId));
         return status;
     }
 

@@ -23,7 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class GoogleCalendarAuthService {
@@ -115,31 +118,61 @@ public class GoogleCalendarAuthService {
     }
 
     public GoogleCalendarTokenEntity getToken(String companyId) {
-        // Ensure lazy check is run so token is fetched if present in gmail
-        isConnected(companyId);
         return tokenRepository.findByCompanyId(companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Google Calendar not connected for this company"));
     }
 
     @Transactional
     public boolean isConnected(String companyId) {
-        boolean exists = tokenRepository.findByCompanyId(companyId).isPresent();
-        if (!exists) {
-            var gmailTokenOpt = gmailTokenRepository.findByCompanyId(companyId);
-            if (gmailTokenOpt.isPresent()) {
-                var gmailToken = gmailTokenOpt.get();
-                GoogleCalendarTokenEntity calendarEntity = new GoogleCalendarTokenEntity();
-                calendarEntity.setUserId(gmailToken.getUserId());
-                calendarEntity.setCompanyId(companyId);
-                calendarEntity.setEmail(gmailToken.getEmail());
-                calendarEntity.setAccessToken(gmailToken.getAccessToken());
-                calendarEntity.setRefreshToken(gmailToken.getRefreshToken());
-                calendarEntity.setTokenExpiry(gmailToken.getTokenExpiry());
-                tokenRepository.save(calendarEntity);
-                return true;
-            }
+        return tokenRepository.findByCompanyId(companyId).isPresent();
+    }
+
+    public Map<String, Object> getConnectionStatus(String companyId) {
+        Map<String, Object> status = new HashMap<>();
+        Optional<GoogleCalendarTokenEntity> tokenOpt = tokenRepository.findByCompanyId(companyId);
+        if (tokenOpt.isEmpty()) {
+            status.put("connected", false);
+            status.put("writeAccess", false);
+            status.put("needsReconnect", true);
+            return status;
         }
-        return exists;
+
+        GoogleCalendarTokenEntity token = tokenOpt.get();
+        boolean writeAccess = hasCalendarWriteAccess(token);
+        status.put("connected", true);
+        status.put("email", token.getEmail());
+        status.put("writeAccess", writeAccess);
+        status.put("needsReconnect", !writeAccess);
+        return status;
+    }
+
+    public boolean hasCalendarWriteAccess(String companyId) {
+        return tokenRepository.findByCompanyId(companyId)
+                .map(this::hasCalendarWriteAccess)
+                .orElse(false);
+    }
+
+    private boolean hasCalendarWriteAccess(GoogleCalendarTokenEntity token) {
+        try {
+            Credential credential = loadCredential(token);
+            String accessToken = credential.getAccessToken();
+            if (accessToken == null || accessToken.isBlank()) {
+                return false;
+            }
+
+            var request = new NetHttpTransport().createRequestFactory()
+                    .buildGetRequest(new GenericUrl(
+                            "https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=" + accessToken));
+            var response = request.execute();
+            var json = JSON_FACTORY.fromInputStream(response.getContent(), Object.class);
+            if (json instanceof Map<?, ?> map && map.get("scope") != null) {
+                String scope = map.get("scope").toString();
+                return scope.contains("calendar.events");
+            }
+        } catch (Exception ignored) {
+            // fall through
+        }
+        return false;
     }
 
     public Credential loadCredential(GoogleCalendarTokenEntity token) {

@@ -1,11 +1,13 @@
 package com.plinth.controller;
 
+import com.plinth.service.ContentService;
 import com.plinth.service.GoogleCalendarAuthService;
 import com.plinth.service.GoogleCalendarEventService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,14 +23,17 @@ public class GoogleCalendarController {
 
     private final GoogleCalendarAuthService authService;
     private final GoogleCalendarEventService eventService;
+    private final ContentService contentService;
     private final String frontendRedirect;
 
     public GoogleCalendarController(
             GoogleCalendarAuthService authService,
             GoogleCalendarEventService eventService,
+            ContentService contentService,
             @Value("${app.google-calendar.frontend-redirect}") String frontendRedirect) {
         this.authService = authService;
         this.eventService = eventService;
+        this.contentService = contentService;
         this.frontendRedirect = frontendRedirect;
     }
 
@@ -44,6 +49,11 @@ public class GoogleCalendarController {
             @RequestParam("state") String companyId) {
         try {
             String email = authService.handleCallback(code, companyId);
+            try {
+                contentService.syncScheduledPostsToCalendar(companyId);
+            } catch (Exception syncEx) {
+                // OAuth succeeded; sync can be retried from dashboard
+            }
             String base = frontendRedirect.endsWith("/") ? frontendRedirect : frontendRedirect + "/";
             String redirect = base + companyId
                     + "?calendar_connected=true"
@@ -60,13 +70,10 @@ public class GoogleCalendarController {
 
     @GetMapping("/status/{companyId}")
     public ResponseEntity<Map<String, Object>> getStatus(@PathVariable String companyId) {
-        boolean connected = authService.isConnected(companyId);
-        Map<String, Object> body = new java.util.HashMap<>();
-        body.put("connected", connected);
+        Map<String, Object> body = new java.util.HashMap<>(authService.getConnectionStatus(companyId));
         body.put("companyId", companyId);
-        if (connected) {
-            var token = authService.getToken(companyId);
-            body.put("email", token.getEmail());
+        if (Boolean.TRUE.equals(body.get("connected"))) {
+            body.put("unsyncedScheduled", contentService.countUnsyncedScheduled(companyId));
         }
         return ResponseEntity.ok(body);
     }
@@ -83,5 +90,10 @@ public class GoogleCalendarController {
             ));
         }
         return ResponseEntity.ok(eventService.getUpcomingEvents(companyId, days));
+    }
+
+    @PostMapping("/sync-scheduled/{companyId}")
+    public ResponseEntity<Map<String, Object>> syncScheduledPosts(@PathVariable String companyId) {
+        return ResponseEntity.ok(contentService.syncScheduledPostsToCalendar(companyId));
     }
 }

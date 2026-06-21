@@ -11,6 +11,11 @@ import { AnalysisReportPage } from "./pages/AnalysisReportPage";
 import { ProgressivePipelinePage } from "./pages/ProgressivePipelinePage";
 import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
 
+function LastDashboardRedirect() {
+  const last = sessionStorage.getItem("plinth-last-dashboard");
+  return <Navigate to={last || "/dashboard/"} replace />;
+}
+
 type Props = { clerkEnabled: boolean };
 
 export function App({ clerkEnabled }: Props) {
@@ -63,10 +68,11 @@ function ClerkApp() {
 
   return (
     <Routes>
-      <Route path="/login" element={isSignedIn ? <Navigate to="/dashboard/" replace /> : <ClerkAuthPage />} />
+      <Route path="/login" element={isSignedIn ? <LastDashboardRedirect /> : <ClerkAuthPage />} />
       <Route path="/onboarding" element={isSignedIn ? <OnboardingPage clerkEnabled /> : <Navigate to="/login" replace />} />
       <Route path="/report/:companyId" element={isSignedIn ? <AnalysisReportPage /> : <Navigate to="/login" replace />} />
       <Route path="/pipeline/:companyId" element={isSignedIn ? <ProgressivePipelinePage /> : <Navigate to="/login" replace />} />
+      <Route path="/dashboard/:companyId/:tab" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/:companyId" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
@@ -84,10 +90,11 @@ function DefaultApp() {
 
   return (
     <Routes>
-      <Route path="/login" element={token ? <Navigate to="/dashboard/" replace /> : <LoginPage />} />
+      <Route path="/login" element={token ? <LastDashboardRedirect /> : <LoginPage />} />
       <Route path="/onboarding" element={token ? <OnboardingPage /> : <Navigate to="/login" replace />} />
       <Route path="/report/:companyId" element={token ? <AnalysisReportPage /> : <Navigate to="/login" replace />} />
       <Route path="/pipeline/:companyId" element={token ? <ProgressivePipelinePage /> : <Navigate to="/login" replace />} />
+      <Route path="/dashboard/:companyId/:tab" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/:companyId" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />

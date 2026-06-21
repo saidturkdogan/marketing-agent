@@ -33,6 +33,15 @@ public class GoogleCalendarEventService {
      */
     public String createContentEvent(String companyId, String title, String description,
                                      OffsetDateTime scheduledAt, String timezone) {
+        return upsertContentEvent(companyId, null, title, description, scheduledAt, timezone);
+    }
+
+    /**
+     * Creates or updates a Google Calendar event for scheduled content.
+     * Returns the event ID on success.
+     */
+    public String upsertContentEvent(String companyId, String existingEventId, String title,
+                                     String description, OffsetDateTime scheduledAt, String timezone) {
         var token = authService.getToken(companyId);
         var credential = authService.loadCredential(token);
 
@@ -45,25 +54,38 @@ public class GoogleCalendarEventService {
 
         String tz = timezone != null && !timezone.isBlank() ? timezone : "Europe/Istanbul";
 
+        EventDateTime start = new EventDateTime()
+                .setDateTime(new DateTime(scheduledAt.toInstant().toEpochMilli()))
+                .setTimeZone(tz);
+        EventDateTime end = new EventDateTime()
+                .setDateTime(new DateTime(scheduledAt.plusMinutes(30).toInstant().toEpochMilli()))
+                .setTimeZone(tz);
+
         try {
+            if (existingEventId != null && !existingEventId.isBlank()) {
+                try {
+                    Event existing = service.events().get("primary", existingEventId).execute();
+                    existing.setSummary(title != null && !title.isBlank() ? title : "Plinth scheduled post");
+                    existing.setDescription(description);
+                    existing.setStart(start);
+                    existing.setEnd(end);
+                    Event updated = service.events().update("primary", existingEventId, existing).execute();
+                    return updated.getId();
+                } catch (Exception ex) {
+                    // Event deleted on Google side — create a fresh one
+                }
+            }
+
             Event event = new Event()
                     .setSummary(title != null && !title.isBlank() ? title : "Plinth scheduled post")
-                    .setDescription(description);
-
-            EventDateTime start = new EventDateTime()
-                    .setDateTime(new DateTime(scheduledAt.toInstant().toEpochMilli()))
-                    .setTimeZone(tz);
-            event.setStart(start);
-
-            EventDateTime end = new EventDateTime()
-                    .setDateTime(new DateTime(scheduledAt.plusMinutes(30).toInstant().toEpochMilli()))
-                    .setTimeZone(tz);
-            event.setEnd(end);
+                    .setDescription(description)
+                    .setStart(start)
+                    .setEnd(end);
 
             Event created = service.events().insert("primary", event).execute();
             return created.getId();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to create calendar event: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to sync calendar event: " + e.getMessage(), e);
         }
     }
 

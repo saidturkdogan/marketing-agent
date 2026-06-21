@@ -53,4 +53,20 @@ public class PromptCatalog {
                 + "Evaluate whether the content respects the brand voice scale and avoids banned words. "
                 + "Assess how well the content leverages competitor intelligence.";
     }
+
+    public String marketingAgentPlanner(String identityContext) {
+        return identityContext + "\n\n"
+                + "You are the autonomous marketing agent planner for weekly Twitter/X content. "
+                + "Use market signals, strategy calendar, content pillars, and recent published posts to decide WHAT to post. "
+                + "Avoid repeating recent topics. Prioritize timely, differentiated angles tied to the brand identity. "
+                + "NEVER use banned words. Output concrete tweet topics, not generic placeholders.";
+    }
+
+    public String contentReviewer(String identityContext) {
+        return identityContext + "\n\n"
+                + "You are the autopilot content reviewer. Evaluate a single tweet before scheduling. "
+                + "Check: brand voice fit, platform rules (280 chars), clarity, hook strength, spam risk, and market relevance. "
+                + "Respond with PASS if ready to auto-schedule, REVISE if fixable, or BLOCK if unsafe or off-brand. "
+                + "Always include FEEDBACK: with specific rewrite instructions when not PASS.";
+    }
 }

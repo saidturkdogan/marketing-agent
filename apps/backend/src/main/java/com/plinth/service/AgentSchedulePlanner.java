@@ -169,7 +169,8 @@ public class AgentSchedulePlanner {
         if (dateObj != null) {
             LocalDate date = parseDate(dateObj.toString());
             if (date != null) {
-                return ZonedDateTime.of(date, time, zone);
+                ZonedDateTime slot = ZonedDateTime.of(date, time, zone);
+                return bumpToFuture(slot, now);
             }
         }
 
@@ -177,10 +178,18 @@ public class AgentSchedulePlanner {
         if (dayNum instanceof Number num) {
             int offset = Math.max(1, num.intValue());
             LocalDate date = now.toLocalDate().plusDays(offset);
-            return ZonedDateTime.of(date, time, zone);
+            return bumpToFuture(ZonedDateTime.of(date, time, zone), now);
         }
 
         return null;
+    }
+
+    private ZonedDateTime bumpToFuture(ZonedDateTime slot, ZonedDateTime now) {
+        ZonedDateTime min = now.plusMinutes(30);
+        while (slot.isBefore(min)) {
+            slot = slot.plusDays(1);
+        }
+        return slot;
     }
 
     private LocalDate parseDate(String raw) {

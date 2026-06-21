@@ -1,0 +1,5 @@
+ALTER TABLE agent_configs ADD COLUMN IF NOT EXISTS llm_budget_usd_per_week DOUBLE PRECISION NOT NULL DEFAULT 5.0;
+ALTER TABLE agent_configs ADD COLUMN IF NOT EXISTS llm_spend_usd_this_week DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE agent_configs ADD COLUMN IF NOT EXISTS x_api_budget_credits_per_week INT NOT NULL DEFAULT 100;
+ALTER TABLE agent_configs ADD COLUMN IF NOT EXISTS x_credits_used_this_week INT NOT NULL DEFAULT 0;
+ALTER TABLE agent_configs ADD COLUMN IF NOT EXISTS budget_week_start TIMESTAMP WITH TIME ZONE;

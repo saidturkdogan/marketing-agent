@@ -470,6 +470,7 @@ export interface ContentItem {
   platformPostId?: string | null;
   platformUrl?: string | null;
   scheduledAt?: string | null;
+  calendarEventId?: string | null;
   publishedAt?: string | null;
   createdAt: string;
   updatedAt: string;

@@ -42,6 +42,8 @@ public class ContentService {
     private final AgentConfigService agentConfigService;
     private final AgentSchedulePlanner schedulePlanner;
     private final ObjectMapper objectMapper;
+    private final AgentBudgetService agentBudgetService;
+    private final GeminiImageService geminiImageService;
     private final RestClient openaiClient;
     private final String openaiApiKey;
 
@@ -57,6 +59,8 @@ public class ContentService {
                           ApprovalService approvalService,
                           AgentConfigService agentConfigService,
                           AgentSchedulePlanner schedulePlanner,
+                          AgentBudgetService agentBudgetService,
+                          GeminiImageService geminiImageService,
                           ObjectMapper objectMapper,
                           @Value("${app.openai.api-key:}") String openaiApiKey) {
         this.contentRepository = contentRepository;
@@ -71,6 +75,8 @@ public class ContentService {
         this.approvalService = approvalService;
         this.agentConfigService = agentConfigService;
         this.schedulePlanner = schedulePlanner;
+        this.agentBudgetService = agentBudgetService;
+        this.geminiImageService = geminiImageService;
         this.objectMapper = objectMapper;
         this.openaiApiKey = openaiApiKey;
 
@@ -147,6 +153,28 @@ public class ContentService {
         return entity;
     }
 
+    @Transactional
+    public ContentEntity reviseContentForAgent(String contentId, String topic,
+                                               String additionalContext, String revisionFeedback) {
+        ContentEntity entity = contentRepository.findByContentId(contentId)
+                .orElseThrow(() -> new IllegalArgumentException("Content not found: " + contentId));
+
+        CompanyProfile profile = companyService.getProfileInternal(entity.getCompanyId());
+        String systemPrompt = buildContentSystemPrompt(entity.getType());
+        String userPrompt = buildContentUserPrompt(profile, entity.getType(), topic, additionalContext)
+                + "\n\n=== REVISION REQUIRED ===\n"
+                + "Previous draft failed review. Apply these fixes:\n"
+                + revisionFeedback
+                + "\n\nReturn an improved version in the same TITLE/BODY/HASHTAGS format.";
+
+        String aiResponse = llmService.generate(systemPrompt, userPrompt);
+        entity.setTitle(extractTitle(aiResponse, topic));
+        entity.setBody(extractBody(aiResponse));
+        entity.setHashtags(extractHashtags(aiResponse));
+        contentRepository.save(entity);
+        return entity;
+    }
+
     // ── Update ───────────────────────────────────────────────────
 
     @Transactional
@@ -174,47 +202,98 @@ public class ContentService {
         contentRepository.delete(entity);
     }
 
-    // ── Generate Image (DALL-E 3) ────────────────────────────────
+    // ── Generate Image (Gemini Nano Banana / DALL-E fallback) ────
 
     @Transactional
     public Map<String, Object> generateImage(String contentId, String imagePrompt) {
         ContentEntity entity = contentRepository.findByContentId(contentId)
                 .orElseThrow(() -> new IllegalArgumentException("Content not found: " + contentId));
 
-        if (openaiApiKey == null || openaiApiKey.isBlank()) {
-            throw new IllegalStateException("OpenAI API key not configured. Set OPENAI_API_KEY in .env");
-        }
+        String prompt = (imagePrompt != null && !imagePrompt.isBlank())
+                ? imagePrompt.trim()
+                : buildImagePrompt(entity);
 
         try {
-            Map<String, Object> payload = Map.of(
-                    "model", "dall-e-3",
-                    "prompt", imagePrompt,
-                    "n", 1,
-                    "size", "1024x1024",
-                    "quality", "standard"
-            );
+            String imageUrl;
+            String provider;
 
-            String responseBody = openaiClient.post()
-                    .uri("/v1/images/generations")
-                    .header("Authorization", "Bearer " + openaiApiKey)
-                    .header("Content-Type", "application/json")
-                    .body(payload)
-                    .retrieve()
-                    .body(String.class);
-
-            JsonNode root = objectMapper.readTree(responseBody);
-            String imageUrl = root.path("data").path(0).path("url").asText();
+            if (geminiImageService.isAvailable()) {
+                imageUrl = geminiImageService.generateImageDataUrl(prompt);
+                provider = "gemini:" + geminiImageService.modelName();
+            } else if (openaiApiKey != null && !openaiApiKey.isBlank()) {
+                imageUrl = generateDalleImageUrl(prompt);
+                provider = "dall-e-3";
+            } else {
+                throw new IllegalStateException(
+                        "No image provider configured. Set GOOGLE_API_KEY for Gemini Nano Banana or OPENAI_API_KEY for DALL-E.");
+            }
 
             if (imageUrl != null && !imageUrl.isBlank()) {
                 entity.setImageUrl(imageUrl);
                 contentRepository.save(entity);
             }
 
-            return Map.of("contentId", contentId, "imageUrl", imageUrl != null ? imageUrl : "");
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("contentId", contentId);
+            result.put("imageUrl", imageUrl != null ? imageUrl : "");
+            result.put("prompt", prompt);
+            result.put("provider", provider);
+            return result;
         } catch (Exception ex) {
-            log.error("DALL-E image generation failed: {}", ex.getMessage(), ex);
+            log.error("Image generation failed: {}", ex.getMessage(), ex);
             throw new RuntimeException("Image generation failed: " + ex.getMessage());
         }
+    }
+
+    private String generateDalleImageUrl(String prompt) throws Exception {
+        Map<String, Object> payload = Map.of(
+                "model", "dall-e-3",
+                "prompt", prompt,
+                "n", 1,
+                "size", "1024x1024",
+                "quality", "standard"
+        );
+
+        String responseBody = openaiClient.post()
+                .uri("/v1/images/generations")
+                .header("Authorization", "Bearer " + openaiApiKey)
+                .header("Content-Type", "application/json")
+                .body(payload)
+                .retrieve()
+                .body(String.class);
+
+        JsonNode root = objectMapper.readTree(responseBody);
+        return root.path("data").path(0).path("url").asText();
+    }
+
+    private String buildImagePrompt(ContentEntity entity) {
+        String title = entity.getTitle() != null ? entity.getTitle().trim() : "";
+        String body = entity.getBody() != null ? entity.getBody().trim() : "";
+        String type = entity.getType() != null ? entity.getType() : "post";
+
+        String topic = !title.isBlank() ? title : body;
+        if (topic.length() > 180) {
+            topic = topic.substring(0, 177) + "...";
+        }
+
+        String context = body;
+        if (context.length() > 320) {
+            context = context.substring(0, 317) + "...";
+        }
+        if (context.isBlank()) {
+            context = topic;
+        }
+
+        String style = switch (type.toLowerCase(Locale.ROOT)) {
+            case "tweet" -> "Engaging Twitter/X social media illustration";
+            case "linkedin_post" -> "Professional LinkedIn marketing visual";
+            case "newsletter" -> "Clean newsletter header illustration";
+            case "blog" -> "Blog article hero image";
+            default -> "Modern marketing visual";
+        };
+
+        return style + " about: " + topic + ". Content context: " + context
+                + ". Vibrant, professional, photorealistic or polished digital art. No text, logos, or watermarks in the image.";
     }
 
     // ── Publish (Twitter/X) ──────────────────────────────────────
@@ -266,11 +345,15 @@ public class ContentService {
     }
 
     private Map<String, Object> doPublish(ContentEntity entity) {
-        String text = buildPublishText(entity);
+        if (!agentBudgetService.canSpendXApi(entity.getCompanyId())) {
+            throw new IllegalStateException("X API credit budget exhausted for this week");
+        }
 
+        String text = buildPublishText(entity);
         PublishResult result = publishService.publishTwitter(text, entity.getCompanyId());
 
         if ("published".equals(result.status())) {
+            agentBudgetService.recordXApiCredit(entity.getCompanyId());
             entity.setStatus("published");
             entity.setPublishedAt(OffsetDateTime.now());
             if (result.externalId() != null) entity.setPlatformPostId(result.externalId());
@@ -325,7 +408,8 @@ public class ContentService {
         ContentEntity entity = contentRepository.findByContentId(contentId)
                 .orElseThrow(() -> new IllegalArgumentException("Content not found: " + contentId));
 
-        entity.setScheduledAt(scheduleTime);
+        OffsetDateTime normalized = ensureFutureScheduleTime(scheduleTime);
+        entity.setScheduledAt(normalized);
         entity.setStatus("scheduled");
         contentRepository.save(entity);
 
@@ -333,33 +417,121 @@ public class ContentService {
         String timezone = config.getTimezone();
 
         String calendarEventId = entity.getCalendarEventId();
+        boolean calendarConnected = calendarAuthService.isConnected(entity.getCompanyId());
+        boolean calendarWriteAccess = calendarConnected && calendarAuthService.hasCalendarWriteAccess(entity.getCompanyId());
+        String calendarError = null;
         try {
-            if (calendarAuthService.isConnected(entity.getCompanyId())) {
+            if (calendarConnected && calendarWriteAccess) {
                 String title = buildCalendarTitle(entity);
                 String description = buildCalendarDescription(entity);
-                calendarEventId = calendarEventService.createContentEvent(
+                calendarEventId = calendarEventService.upsertContentEvent(
                         entity.getCompanyId(),
+                        calendarEventId,
                         title,
                         description,
-                        scheduleTime,
+                        normalized,
                         timezone
                 );
                 entity.setCalendarEventId(calendarEventId);
                 contentRepository.save(entity);
             }
         } catch (Exception ex) {
+            calendarError = ex.getMessage();
             log.warn("Failed to create calendar event for content {}: {}", contentId, ex.getMessage());
         }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("contentId", contentId);
         response.put("status", "scheduled");
-        response.put("scheduledAt", scheduleTime.toString());
-        response.put("calendarEventCreated", calendarEventId != null);
+        response.put("scheduledAt", normalized.toString());
+        response.put("calendarConnected", calendarConnected);
+        response.put("calendarWriteAccess", calendarWriteAccess);
+        response.put("calendarEventCreated", calendarEventId != null && calendarWriteAccess);
         if (calendarEventId != null) {
             response.put("calendarEventId", calendarEventId);
         }
+        if (calendarError != null) {
+            response.put("calendarError", calendarError);
+        }
+        if (calendarConnected && calendarEventId == null && calendarError == null) {
+            response.put("calendarError", "Could not create Google Calendar event");
+        }
+        if (!calendarConnected) {
+            response.put("calendarHint", "Connect Google Calendar to see this tweet on your phone");
+        } else if (!calendarWriteAccess) {
+            response.put("calendarHint", "Reconnect Google Calendar to grant calendar write permission");
+        }
         return response;
+    }
+
+    public long countUnsyncedScheduled(String companyId) {
+        OffsetDateTime now = OffsetDateTime.now();
+        return contentRepository.findByCompanyIdAndStatusOrderByCreatedAtDesc(companyId, "scheduled")
+                .stream()
+                .filter(e -> e.getScheduledAt() != null && e.getScheduledAt().isAfter(now))
+                .filter(e -> e.getCalendarEventId() == null || e.getCalendarEventId().isBlank())
+                .count();
+    }
+
+    @Transactional
+    public Map<String, Object> syncScheduledPostsToCalendar(String companyId) {
+        if (!calendarAuthService.isConnected(companyId)) {
+            throw new IllegalStateException("Google Calendar not connected. Connect it from Dashboard first.");
+        }
+        if (!calendarAuthService.hasCalendarWriteAccess(companyId)) {
+            throw new IllegalStateException(
+                    "Google Calendar is connected but missing write permission. Click Connect calendar again to re-authorize.");
+        }
+
+        var config = agentConfigService.getOrCreate(companyId);
+        String timezone = config.getTimezone();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        int synced = 0;
+        int skipped = 0;
+        int failed = 0;
+        List<Map<String, String>> failures = new ArrayList<>();
+
+        List<ContentEntity> scheduled = contentRepository
+                .findByCompanyIdAndStatusOrderByCreatedAtDesc(companyId, "scheduled");
+
+        for (ContentEntity entity : scheduled) {
+            if (entity.getScheduledAt() == null || !entity.getScheduledAt().isAfter(now)) {
+                skipped++;
+                continue;
+            }
+            if (entity.getCalendarEventId() != null && !entity.getCalendarEventId().isBlank()) {
+                skipped++;
+                continue;
+            }
+            try {
+                String eventId = calendarEventService.upsertContentEvent(
+                        companyId,
+                        null,
+                        buildCalendarTitle(entity),
+                        buildCalendarDescription(entity),
+                        entity.getScheduledAt(),
+                        timezone
+                );
+                entity.setCalendarEventId(eventId);
+                contentRepository.save(entity);
+                synced++;
+            } catch (Exception ex) {
+                failed++;
+                failures.add(Map.of(
+                        "contentId", entity.getContentId(),
+                        "error", ex.getMessage() != null ? ex.getMessage() : "unknown"
+                ));
+                log.warn("Calendar sync failed for {}: {}", entity.getContentId(), ex.getMessage());
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("synced", synced);
+        result.put("skipped", skipped);
+        result.put("failed", failed);
+        result.put("failures", failures);
+        return result;
     }
 
     private String buildCalendarTitle(ContentEntity entity) {
@@ -388,6 +560,14 @@ public class ContentService {
             sb.append("\n\n").append(String.join(" ", entity.getHashtags().stream().map(t -> "#" + t).toList()));
         }
         return sb.toString();
+    }
+
+    private OffsetDateTime ensureFutureScheduleTime(OffsetDateTime scheduleTime) {
+        OffsetDateTime minAllowed = OffsetDateTime.now().plusMinutes(5);
+        if (scheduleTime.isBefore(minAllowed)) {
+            throw new IllegalArgumentException("Schedule time must be at least 5 minutes in the future");
+        }
+        return scheduleTime;
     }
 
     // ── AI Prompt Building ───────────────────────────────────────
@@ -518,6 +698,7 @@ public class ContentService {
         map.put("platformPostId", e.getPlatformPostId());
         map.put("platformUrl", e.getPlatformUrl());
         map.put("scheduledAt", e.getScheduledAt() != null ? e.getScheduledAt().toString() : null);
+        map.put("calendarEventId", e.getCalendarEventId());
         map.put("publishedAt", e.getPublishedAt() != null ? e.getPublishedAt().toString() : null);
         map.put("createdAt", e.getCreatedAt() != null ? e.getCreatedAt().toString() : null);
         map.put("updatedAt", e.getUpdatedAt() != null ? e.getUpdatedAt().toString() : null);

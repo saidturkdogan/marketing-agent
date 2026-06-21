@@ -203,7 +203,14 @@ export function getGoogleCalendarAuthUrl(companyId: string) {
 }
 
 export function getGoogleCalendarStatus(companyId: string) {
-  return request<{ connected: boolean; companyId: string; email?: string }>(
+  return request<{
+    connected: boolean;
+    companyId: string;
+    email?: string;
+    writeAccess?: boolean;
+    needsReconnect?: boolean;
+    unsyncedScheduled?: number;
+  }>(
     `/api/calendar/status/${companyId}`,
   );
 }
@@ -215,6 +222,13 @@ export function getGoogleCalendarEvents(companyId: string, days = 7) {
     email?: string;
     events: GoogleCalendarEvent[];
   }>(`/api/calendar/events/${companyId}?days=${days}`);
+}
+
+export function syncScheduledPostsToCalendar(companyId: string) {
+  return request<{ synced: number; skipped: number; failed: number; failures: Array<{ contentId: string; error: string }> }>(
+    `/api/calendar/sync-scheduled/${companyId}`,
+    { method: "POST" },
+  );
 }
 
 // Campaigns
@@ -434,11 +448,14 @@ export function deleteContent(companyId: string, contentId: string) {
   });
 }
 
-export function generateContentImage(companyId: string, contentId: string, prompt: string) {
-  return request<{ contentId: string; imageUrl: string }>(`/api/content/${companyId}/${contentId}/generate-image`, {
-    method: "POST",
-    body: JSON.stringify({ prompt }),
-  });
+export function generateContentImage(companyId: string, contentId: string, prompt?: string) {
+  return request<{ contentId: string; imageUrl: string; prompt?: string }>(
+    `/api/content/${companyId}/${contentId}/generate-image`,
+    {
+      method: "POST",
+      body: JSON.stringify(prompt ? { prompt } : {}),
+    },
+  );
 }
 
 // Twitter Auth
@@ -457,7 +474,16 @@ export function publishContent(companyId: string, contentId: string) {
 }
 
 export function scheduleContent(companyId: string, contentId: string, scheduledAt: string) {
-  return request<{ contentId: string; status: string; scheduledAt: string; calendarEventCreated: boolean }>(
+  return request<{
+    contentId: string;
+    status: string;
+    scheduledAt: string;
+    calendarConnected?: boolean;
+    calendarEventCreated: boolean;
+    calendarEventId?: string;
+    calendarHint?: string;
+    calendarError?: string;
+  }>(
     `/api/content/${companyId}/${contentId}/schedule`,
     {
       method: "POST",
@@ -482,6 +508,23 @@ export interface AgentStatus {
   twitterConnected: boolean;
   gmailConnected: boolean;
   calendarConnected: boolean;
+  llmBudgetUsdPerWeek?: number;
+  llmSpendUsdThisWeek?: number;
+  llmRemainingUsd?: number;
+  xApiBudgetCreditsPerWeek?: number;
+  xCreditsUsedThisWeek?: number;
+  xCreditsRemaining?: number;
+  llmBudgetExhausted?: boolean;
+  xBudgetExhausted?: boolean;
+}
+
+export interface AgentDecision {
+  runId: string;
+  step: string;
+  reasoning?: string;
+  answer?: string;
+  confidence?: number;
+  createdAt?: string;
 }
 
 export function getAgentStatus(companyId: string) {
@@ -500,10 +543,37 @@ export function updateAgentConfig(companyId: string, config: Record<string, unkn
 }
 
 export function runAgent(companyId: string) {
-  return request<{ status: string; message?: string; created?: number; scheduled?: number; pendingApproval?: number }>(
-    `/api/agent/run/${companyId}`,
-    { method: "POST" }
-  );
+  return request<{
+    status: string;
+    message?: string;
+    runId?: string;
+    created?: number;
+    scheduled?: number;
+    pendingApproval?: number;
+    failed?: number;
+    budgetSkipped?: number;
+    marketDataReal?: boolean;
+    items?: Array<Record<string, unknown>>;
+    budget?: Record<string, unknown>;
+  }>(`/api/agent/run/${companyId}`, { method: "POST" });
+}
+
+export function getAgentBudget(companyId: string) {
+  return request<Record<string, unknown>>(`/api/agent/budget/${companyId}`);
+}
+
+export function getAgentMarketBrief(companyId: string) {
+  return request<{
+    summary?: string;
+    hasRealConnectors?: boolean;
+    signals?: Record<string, unknown>;
+    brief?: Record<string, unknown>;
+    performanceInsights?: Record<string, unknown>;
+  }>(`/api/agent/market-brief/${companyId}`);
+}
+
+export function getAgentDecisions(companyId: string, limit = 15) {
+  return request<AgentDecision[]>(`/api/agent/decisions/${companyId}?limit=${limit}`);
 }
 
 export interface ApprovalItem {

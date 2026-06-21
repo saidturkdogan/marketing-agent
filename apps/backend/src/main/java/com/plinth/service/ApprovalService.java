@@ -89,13 +89,18 @@ public class ApprovalService {
 
     @Transactional
     public ApprovalEntity requestContentApproval(String companyId, String contentId, GuardrailReport report) {
+        return requestContentApproval(companyId, contentId, report.summary());
+    }
+
+    @Transactional
+    public ApprovalEntity requestContentApproval(String companyId, String contentId, String reason) {
         ApprovalEntity approval = new ApprovalEntity();
         approval.setApprovalId(UUID.randomUUID().toString());
         approval.setCompanyId(companyId);
         approval.setContentId(contentId);
         approval.setStepName("content_publish");
         approval.setStatus("pending");
-        approval.setRequestReason(report.summary());
+        approval.setRequestReason(reason);
 
         ApprovalEntity saved = approvalRepository.save(approval);
         log.info("Content approval requested for company {} content {} (id={})",

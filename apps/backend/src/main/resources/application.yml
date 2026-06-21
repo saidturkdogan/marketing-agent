@@ -43,6 +43,7 @@ app:
   llm:
     google-api-key: ${GOOGLE_API_KEY:}
     google-model: ${GOOGLE_MODEL:gemini-2.5-flash}
+    google-image-model: ${GOOGLE_IMAGE_MODEL:gemini-2.5-flash-image}
   embedding:
     api-key: ${EMBEDDING_API_KEY:sk-mia_a68837_R-g4EagJ4ruwW9xKO48DlESDtxneIZHliroZ5LvrgBR_SzwU_loUj9eII9_syo6L}
     model: ${EMBEDDING_MODEL:qwen3-embedding-8b}
@@ -69,3 +70,5 @@ app:
     frontend-redirect: ${GOOGLE_CALENDAR_FRONTEND_REDIRECT:http://localhost:5173/dashboard}
   openai:
     api-key: ${OPENAI_API_KEY:}
+  serpapi:
+    api-key: ${SERPAPI_KEY:}

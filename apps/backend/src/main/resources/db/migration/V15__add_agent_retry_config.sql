@@ -1,0 +1,2 @@
+ALTER TABLE agent_configs ADD COLUMN IF NOT EXISTS max_content_retries INT NOT NULL DEFAULT 2;
+ALTER TABLE agent_configs ADD COLUMN IF NOT EXISTS min_confidence_to_autopublish DOUBLE PRECISION NOT NULL DEFAULT 0.7;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type { ContentItem, ContentType } from "../types";
 import {
   listContents,
@@ -117,9 +117,27 @@ export function ContentCreatorView({ companyId }: Props) {
   // Actions state
   const [publishing, setPublishing] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
-  const [imagePrompt, setImagePrompt] = useState("");
-  const [showImagePrompt, setShowImagePrompt] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const minScheduleInput = useMemo(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 5);
+    d.setSeconds(0, 0);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }, []);
+
+  const defaultScheduleInput = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(10, 0, 0, 0);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }, []);
+
+  const openSchedulePicker = () => {
+    setScheduleDate((prev) => prev || defaultScheduleInput);
+    setShowSchedule(true);
+  };
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduling, setScheduling] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -191,6 +209,11 @@ export function ContentCreatorView({ companyId }: Props) {
     try {
       const items = await listContents(companyId);
       setContents(items);
+      setSelectedId((prev) => {
+        if (items.length === 0) return null;
+        if (prev && items.some((c) => c.contentId === prev)) return prev;
+        return items[0].contentId;
+      });
     } catch {
       /* ignore */
     } finally {
@@ -201,6 +224,19 @@ export function ContentCreatorView({ companyId }: Props) {
   useEffect(() => {
     loadContents();
   }, [loadContents]);
+
+  useEffect(() => {
+    if (mode === "create" || contents.length === 0) return;
+    setSelectedId((prev) => {
+      if (prev && contents.some((c) => c.contentId === prev)) return prev;
+      const visible = contents.find((c) => {
+        if (filter !== "all" && c.type !== filter) return false;
+        if (statusFilter !== "all" && c.status !== statusFilter) return false;
+        return true;
+      });
+      return visible?.contentId ?? contents[0].contentId;
+    });
+  }, [contents, mode, filter, statusFilter]);
 
   const selectedItem = contents.find((c) => c.contentId === selectedId) ?? null;
 
@@ -275,14 +311,12 @@ export function ContentCreatorView({ companyId }: Props) {
   };
 
   const handleGenerateImage = async () => {
-    if (!selectedItem || !imagePrompt.trim()) return;
+    if (!selectedItem) return;
     setGeneratingImage(true);
     setActionMessage(null);
     try {
-      await generateContentImage(companyId, selectedItem.contentId, imagePrompt.trim());
-      setActionMessage({ type: "success", text: "Image generated! 🎨" });
-      setShowImagePrompt(false);
-      setImagePrompt("");
+      await generateContentImage(companyId, selectedItem.contentId);
+      setActionMessage({ type: "success", text: "Image generated from your content! 🎨" });
       await loadContents();
     } catch (err) {
       setActionMessage({ type: "error", text: err instanceof Error ? err.message : "Image generation failed" });
@@ -293,13 +327,28 @@ export function ContentCreatorView({ companyId }: Props) {
 
   const handleSchedule = async () => {
     if (!selectedItem || !scheduleDate) return;
+    const chosen = new Date(scheduleDate);
+    const min = new Date();
+    min.setMinutes(min.getMinutes() + 5);
+    if (chosen.getTime() < min.getTime()) {
+      setActionMessage({ type: "error", text: "Schedule time must be at least 5 minutes in the future." });
+      return;
+    }
     setScheduling(true);
     setActionMessage(null);
     try {
       const result = await scheduleContent(companyId, selectedItem.contentId, new Date(scheduleDate).toISOString());
+      let scheduleText = "Scheduled!";
+      if (result.calendarEventCreated) {
+        scheduleText += " 📅 Added to Google Calendar — you'll see it on your phone too.";
+      } else if (result.calendarHint) {
+        scheduleText += ` ${result.calendarHint} (Dashboard → Connect calendar).`;
+      } else if (result.calendarError) {
+        scheduleText += ` Calendar sync failed: ${result.calendarError}`;
+      }
       setActionMessage({
         type: "success",
-        text: `Scheduled!${result.calendarEventCreated ? " 📅 Added to Google Calendar" : ""}`,
+        text: scheduleText,
       });
       setShowSchedule(false);
       setScheduleDate("");
@@ -349,7 +398,7 @@ export function ContentCreatorView({ companyId }: Props) {
   }, [actionMessage]);
 
   return (
-    <div className="flex h-full min-h-[calc(100vh-3.5rem)] bg-slate-50/80">
+    <div className="flex h-full min-h-0 bg-slate-50/80">
       {/* ─── Left Panel ─── */}
       <div className="w-[340px] border-r border-slate-200/80 flex flex-col bg-white flex-shrink-0 shadow-[2px_0_24px_-12px_rgba(15,23,42,0.08)]">
         {/* Header */}
@@ -808,7 +857,7 @@ export function ContentCreatorView({ companyId }: Props) {
 
                 {selectedItem.status === "draft" && (
                   <Button
-                    onClick={() => setShowSchedule(!showSchedule)}
+                    onClick={() => (showSchedule ? setShowSchedule(false) : openSchedulePicker())}
                     variant="outline"
                     size="sm"
                     className="border-slate-200 text-slate-700 rounded-xl h-9"
@@ -819,13 +868,18 @@ export function ContentCreatorView({ companyId }: Props) {
                 )}
 
                 <Button
-                  onClick={() => setShowImagePrompt(!showImagePrompt)}
+                  onClick={handleGenerateImage}
+                  disabled={generatingImage}
                   variant="outline"
                   size="sm"
                   className="border-slate-200 text-slate-700 rounded-xl h-9"
                 >
-                  <Image className="h-3.5 w-3.5 mr-1.5" />
-                  Generate Image
+                  {generatingImage ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Image className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  {generatingImage ? "Generating..." : "Generate Image"}
                 </Button>
 
                 {selectedItem.status === "draft" && (
@@ -875,6 +929,7 @@ export function ContentCreatorView({ companyId }: Props) {
                       <input
                         type="datetime-local"
                         value={scheduleDate}
+                        min={minScheduleInput}
                         onChange={(e) => setScheduleDate(e.target.value)}
                         className="w-full px-3 py-2.5 rounded-xl border border-violet-200 text-sm focus:border-violet-400 focus:outline-none bg-white"
                       />
@@ -896,53 +951,48 @@ export function ContentCreatorView({ companyId }: Props) {
               </Card>
             )}
 
-            {/* Image Prompt */}
-            {showImagePrompt && (
-              <Card className="border-slate-200 bg-slate-50/50 shadow-sm rounded-2xl overflow-hidden">
-                <CardContent className="p-4">
-                  <div className="flex items-end gap-3">
-                    <div className="flex-1">
-                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Image Description (DALL-E 3)</label>
-                      <input
-                        type="text"
-                        value={imagePrompt}
-                        onChange={(e) => setImagePrompt(e.target.value)}
-                        placeholder="e.g. Modern minimalist SaaS dashboard illustration"
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-slate-400 focus:outline-none bg-white"
-                      />
-                    </div>
-                    <Button
-                      onClick={handleGenerateImage}
-                      disabled={!imagePrompt.trim() || generatingImage}
-                      className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl h-10"
-                    >
-                      {generatingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Image className="h-4 w-4 mr-1.5" />}
-                      {generatingImage ? "..." : "Generate"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
         ) : (
-          /* ─── Empty State ─── */
+          /* ─── Empty / pick state ─── */
           <div className="flex items-center justify-center h-full min-h-[480px] p-8">
             <div className="text-center max-w-md">
               <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-5">
                 <PenLine className="h-8 w-8 text-slate-400" />
               </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2 tracking-tight">Content Studio</h3>
-              <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-                Create, schedule, and publish AI-powered tweets for your brand.
-                Select content from the left panel or create something new.
-              </p>
-              <Button
-                onClick={() => setMode("create")}
-                className="bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/10 rounded-xl h-11 px-6"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create Your First Content
-              </Button>
+              {contents.length > 0 ? (
+                <>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2 tracking-tight">Select content</h3>
+                  <p className="text-sm text-slate-500 mb-8 leading-relaxed">
+                    You have {contents.length} item{contents.length === 1 ? "" : "s"} in your library.
+                    Pick one from the left panel to preview, edit, schedule, or publish.
+                  </p>
+                  <Button
+                    onClick={() => {
+                      const first = filteredContents[0] ?? contents[0];
+                      if (first) setSelectedId(first.contentId);
+                    }}
+                    variant="outline"
+                    className="rounded-xl h-11 px-6 border-slate-200"
+                  >
+                    Open latest content
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2 tracking-tight">Content Studio</h3>
+                  <p className="text-sm text-slate-500 mb-8 leading-relaxed">
+                    Create, schedule, and publish AI-powered tweets for your brand.
+                    Start with your first piece of content below.
+                  </p>
+                  <Button
+                    onClick={() => setMode("create")}
+                    className="bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/10 rounded-xl h-11 px-6"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Your First Content
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}

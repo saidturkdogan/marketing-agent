@@ -1,6 +1,12 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
+import {
+  dashboardPath,
+  isDashboardView,
+  resolveDashboardView,
+  type DashboardView,
+} from "../lib/dashboardRoutes";
 import {
   getDashboard,
   getStrategy,
@@ -13,6 +19,7 @@ import {
   getGoogleCalendarAuthUrl,
   getGoogleCalendarStatus,
   getGoogleCalendarEvents,
+  syncScheduledPostsToCalendar,
   getGmailStatus,
   getTwitterStatus,
   type GoogleCalendarEvent,
@@ -81,7 +88,7 @@ import {
   Twitter,
 } from "lucide-react";
 
-type View = "overview" | "agent" | "content" | "approval" | "settings" | "mails";
+type View = DashboardView;
 
 const NAV_ITEMS: { id: View; label: string; icon: typeof Home }[] = [
   { id: "overview", label: "Dashboard", icon: Home },
@@ -102,7 +109,7 @@ const THEMES = [
 const THEME_STORAGE_KEY = "plinth-theme";
 
 export function DashboardPage() {
-  const { companyId } = useParams<{ companyId: string }>();
+  const { companyId, tab: tabParam } = useParams<{ companyId: string; tab?: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const token = useAuthStore((s) => s.token);
@@ -110,23 +117,48 @@ export function DashboardPage() {
   const userName = useAuthStore((s) => s.name);
   const userEmail = useAuthStore((s) => s.email);
 
-  const [view, setView] = useState<View>("overview");
+  const viewFromUrl = useMemo(
+    () => resolveDashboardView(tabParam, searchParams.get("tab")),
+    [tabParam, searchParams],
+  );
+
+  const view = viewFromUrl;
+
+  const buildDashboardUrl = useCallback(
+    (targetCompanyId: string, targetView: View) => {
+      const next = new URLSearchParams(searchParams);
+      next.delete("tab");
+      const base = dashboardPath(targetCompanyId, targetView);
+      const qs = next.toString();
+      return qs ? `${base}?${qs}` : base;
+    },
+    [searchParams],
+  );
 
   const handleViewChange = (newView: View) => {
-    setView(newView);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("tab", newView);
-      return next;
-    }, { replace: true });
+    if (!companyId) return;
+    navigate(buildDashboardUrl(companyId, newView), { replace: true });
   };
 
   useEffect(() => {
-    const tab = searchParams.get("tab") as View;
-    if (["overview", "agent", "content", "approval", "settings", "mails"].includes(tab)) {
-      setView(tab);
+    if (companyId) {
+      sessionStorage.setItem("plinth-last-dashboard", buildDashboardUrl(companyId, view));
     }
-  }, [searchParams]);
+  }, [companyId, view, buildDashboardUrl]);
+
+  useEffect(() => {
+    if (!companyId) return;
+
+    const legacyTab = searchParams.get("tab");
+    if (legacyTab && isDashboardView(legacyTab)) {
+      navigate(buildDashboardUrl(companyId, legacyTab), { replace: true });
+      return;
+    }
+
+    if (tabParam && !isDashboardView(tabParam)) {
+      navigate(buildDashboardUrl(companyId, "overview"), { replace: true });
+    }
+  }, [companyId, tabParam, searchParams, navigate, buildDashboardUrl]);
 
   const [selectedContent, setSelectedContent] = useState<Record<
     string,
@@ -137,7 +169,8 @@ export function DashboardPage() {
   );
   const [strategyData, setStrategyData] = useState<any>(null);
   const [company, setCompany] = useState<Company | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [mountedViews, setMountedViews] = useState<Set<View>>(() => new Set([viewFromUrl]));
   const [error, setError] = useState("");
 
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -155,10 +188,15 @@ export function DashboardPage() {
   const themePickerRef = useRef<HTMLDivElement>(null);
 
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
+  const [googleCalendarWriteAccess, setGoogleCalendarWriteAccess] = useState(false);
+  const [googleCalendarNeedsReconnect, setGoogleCalendarNeedsReconnect] = useState(false);
+  const [unsyncedScheduledCount, setUnsyncedScheduledCount] = useState(0);
   const [googleCalendarEmail, setGoogleCalendarEmail] = useState("");
   const [googleCalendarEvents, setGoogleCalendarEvents] = useState<GoogleCalendarEvent[]>([]);
   const [googleCalendarLoading, setGoogleCalendarLoading] = useState(false);
   const [connectingCalendar, setConnectingCalendar] = useState(false);
+  const [syncingCalendar, setSyncingCalendar] = useState(false);
+  const [calendarSyncMessage, setCalendarSyncMessage] = useState<string | null>(null);
 
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState("");
@@ -230,7 +268,6 @@ export function DashboardPage() {
 
   const loadData = useCallback(async () => {
     if (!companyId) return;
-    setLoading(true);
     setError("");
     try {
       const [dash, comp] = await Promise.all([
@@ -257,8 +294,15 @@ export function DashboardPage() {
     try {
       const status = await getGoogleCalendarStatus(companyId);
       setGoogleCalendarConnected(status.connected);
+      setGoogleCalendarWriteAccess(status.writeAccess ?? false);
+      setGoogleCalendarNeedsReconnect(status.needsReconnect ?? false);
+      setUnsyncedScheduledCount(status.unsyncedScheduled ?? 0);
       setGoogleCalendarEmail(status.email ?? "");
       if (!status.connected) {
+        setGoogleCalendarEvents([]);
+        return;
+      }
+      if (!status.writeAccess) {
         setGoogleCalendarEvents([]);
         return;
       }
@@ -271,6 +315,9 @@ export function DashboardPage() {
       }
     } catch {
       setGoogleCalendarConnected(false);
+      setGoogleCalendarWriteAccess(false);
+      setGoogleCalendarNeedsReconnect(false);
+      setUnsyncedScheduledCount(0);
       setGoogleCalendarEvents([]);
     } finally {
       setGoogleCalendarLoading(false);
@@ -288,6 +335,28 @@ export function DashboardPage() {
     }
   }, [companyId]);
 
+  const handleSyncCalendar = useCallback(async () => {
+    if (!companyId) return;
+    setSyncingCalendar(true);
+    setCalendarSyncMessage(null);
+    try {
+      const result = await syncScheduledPostsToCalendar(companyId);
+      await loadCalendarData();
+      listContents(companyId).then(setAllContents).catch(() => {});
+      if (result.synced > 0) {
+        setCalendarSyncMessage(`${result.synced} tweet${result.synced === 1 ? "" : "s"} added to Google Calendar — check your phone app.`);
+      } else if (result.failed > 0) {
+        setCalendarSyncMessage(`Sync failed for ${result.failed} item(s). Try reconnecting Google Calendar.`);
+      } else {
+        setCalendarSyncMessage("All scheduled tweets are already in Google Calendar.");
+      }
+    } catch (err) {
+      setCalendarSyncMessage(err instanceof Error ? err.message : "Calendar sync failed");
+    } finally {
+      setSyncingCalendar(false);
+    }
+  }, [companyId, loadCalendarData]);
+
   useEffect(() => {
     if (companyId) loadCalendarData();
   }, [companyId, loadCalendarData]);
@@ -296,6 +365,11 @@ export function DashboardPage() {
     if (!companyId) return;
     listContents(companyId).then(setAllContents).catch(() => {});
   }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId || view !== "overview") return;
+    listContents(companyId).then(setAllContents).catch(() => {});
+  }, [companyId, view]);
 
   useEffect(() => {
     if (!companyId) return;
@@ -316,33 +390,86 @@ export function DashboardPage() {
   }, [searchParams, companyId, loadCalendarData, setSearchParams]);
 
   useEffect(() => {
+    setMountedViews(new Set([view]));
+  }, [companyId]);
+
+  useEffect(() => {
+    setMountedViews((prev) => {
+      if (prev.has(view)) return prev;
+      const next = new Set(prev);
+      next.add(view);
+      return next;
+    });
+  }, [view]);
+
+  useEffect(() => {
     if (!token && !isSignedIn) {
       navigate("/login", { replace: true });
+    }
+  }, [token, isSignedIn, navigate]);
+
+  useEffect(() => {
+    if (!token && !isSignedIn) return;
+    if (companyId) return;
+
+    const stored = sessionStorage.getItem("plinth-last-dashboard");
+    if (stored && /^\/dashboard\/[^/]+/.test(stored)) {
+      navigate(stored, { replace: true });
       return;
     }
-    if (!companyId) {
-      listCompanies()
-        .then((cs) => {
-          if (cs.length > 0)
-            navigate(`/dashboard/${cs[0].companyId}`, { replace: true });
-          else navigate("/onboarding", { replace: true });
-        })
-        .catch(() => navigate("/onboarding", { replace: true }));
-      return;
-    }
+    const pendingView = resolveDashboardView(undefined, searchParams.get("tab"));
+    listCompanies()
+      .then((cs) => {
+        if (cs.length > 0)
+          navigate(buildDashboardUrl(cs[0].companyId, pendingView), { replace: true });
+        else navigate("/onboarding", { replace: true });
+      })
+      .catch(() => navigate("/onboarding", { replace: true }));
+  }, [token, isSignedIn, companyId, navigate, searchParams, buildDashboardUrl]);
+
+  useEffect(() => {
+    if ((!token && !isSignedIn) || !companyId) return;
+    setLoading(true);
     loadData();
-  }, [token, isSignedIn, navigate, loadData, companyId]);
+  }, [token, isSignedIn, companyId, loadData]);
 
-  if (!token && !isSignedIn) return null;
-
-  const score = dashboardData?.marketingScore ?? 0;
-
-  if (loading)
+  if (!token && !isSignedIn) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background font-sans">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div className="flex h-screen items-center justify-center bg-[#2E2F32] font-sans">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
       </div>
     );
+  }
+
+  if (!companyId) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#2E2F32] font-sans">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+      </div>
+    );
+  }
+
+  const score = dashboardData?.marketingScore ?? 0;
+  const overviewLoading = loading && !dashboardData;
+
+  const scheduledPosts = allContents
+    .filter(
+      (c) =>
+        c.status === "scheduled" &&
+        c.scheduledAt &&
+        new Date(c.scheduledAt).getTime() > Date.now() - 60_000,
+    )
+    .map((c) => ({
+      id: c.contentId,
+      title: c.title || c.body?.substring(0, 48) || "Scheduled post",
+      start: c.scheduledAt as string,
+      type: c.type,
+      inGoogleCalendar: Boolean(c.calendarEventId),
+      calendarEventId: c.calendarEventId ?? null,
+    }));
+
+  const unsyncedFromContents = scheduledPosts.filter((p) => !p.inGoogleCalendar).length;
+  const calendarOnlyEvents = filterLinkedCalendarEvents(googleCalendarEvents, scheduledPosts);
 
   const calendar = (dashboardData?.calendar || {}) as Record<string, unknown>;
   const strategy = (dashboardData?.strategy || {}) as Record<string, unknown>;
@@ -729,9 +856,13 @@ export function DashboardPage() {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-white">
-          <div className="flex-1 overflow-y-auto">
-          {view === "overview" && (
+        <div className="flex-1 flex flex-col overflow-hidden bg-white min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+          {mountedViews.has("overview") && (
+            <div className={view === "overview" ? "min-h-full" : "hidden"} aria-hidden={view !== "overview"}>
+              {overviewLoading ? (
+                <DashboardOverviewSkeleton />
+              ) : (
             <OverviewView
               companyId={companyId}
               company={company}
@@ -755,31 +886,46 @@ export function DashboardPage() {
               date={formatDate()}
               userName={userName ?? undefined}
               googleCalendarConnected={googleCalendarConnected}
+              googleCalendarWriteAccess={googleCalendarWriteAccess}
+              googleCalendarNeedsReconnect={googleCalendarNeedsReconnect}
+              unsyncedScheduledCount={Math.max(unsyncedScheduledCount, unsyncedFromContents)}
               googleCalendarEmail={googleCalendarEmail}
-              googleCalendarEvents={googleCalendarEvents}
+              calendarOnlyEvents={calendarOnlyEvents}
               googleCalendarLoading={googleCalendarLoading}
               connectingCalendar={connectingCalendar}
               onConnectCalendar={handleConnectCalendar}
+              syncingCalendar={syncingCalendar}
+              onSyncCalendar={handleSyncCalendar}
+              calendarSyncMessage={calendarSyncMessage}
+              scheduledPosts={scheduledPosts}
+              onSelectScheduledPost={() => handleViewChange("content")}
             />
-          )}
-          {view === "agent" && companyId && (
-            <div className="px-8 py-6">
-              <AgentPanel companyId={companyId} />
+              )}
             </div>
           )}
-          {view === "content" && companyId && (
-            <ContentCreatorView
-              companyId={companyId}
-            />
+          {mountedViews.has("agent") && companyId && (
+            <div className={view === "agent" ? "h-full min-h-0" : "hidden"} aria-hidden={view !== "agent"}>
+              <div className="h-full min-h-0 px-5 py-5">
+                <AgentPanel companyId={companyId} />
+              </div>
+            </div>
           )}
-          {view === "approval" && (
+          {mountedViews.has("content") && companyId && (
+            <div className={view === "content" ? "h-full min-h-0" : "hidden"} aria-hidden={view !== "content"}>
+              <ContentCreatorView companyId={companyId} />
+            </div>
+          )}
+          {mountedViews.has("approval") && (
+            <div className={view === "approval" ? "min-h-full" : "hidden"} aria-hidden={view !== "approval"}>
             <ApprovalPoolView
               posts={posts}
               newsletter={newsletter}
               strategyId={dashboardData?.strategyId}
             />
+            </div>
           )}
-          {view === "settings" && (
+          {mountedViews.has("settings") && (
+            <div className={view === "settings" ? "min-h-full" : "hidden"} aria-hidden={view !== "settings"}>
             <div className="max-w-3xl mx-auto px-8 py-6 space-y-6">
               <h2 className="text-lg font-bold text-gray-900">Settings</h2>
 
@@ -836,9 +982,12 @@ export function DashboardPage() {
                 </Card>
               </div>
             </div>
+            </div>
           )}
-          {view === "mails" && companyId && (
+          {mountedViews.has("mails") && companyId && (
+            <div className={view === "mails" ? "h-full min-h-0" : "hidden"} aria-hidden={view !== "mails"}>
             <MailsView companyId={companyId} />
+            </div>
           )}
         </div>
         </div>
@@ -851,10 +1000,30 @@ export function DashboardPage() {
             setShowCreateModal(false);
             const updated = await listCompanies();
             setCompanies(updated);
-            navigate(`/dashboard/${id}`, { replace: true });
+            navigate(buildDashboardUrl(id, view), { replace: true });
           }}
         />
       )}
+    </div>
+  );
+}
+
+function DashboardOverviewSkeleton() {
+  return (
+    <div className="max-w-[1400px] mx-auto px-8 py-6 space-y-6 animate-pulse">
+      <div className="space-y-2">
+        <div className="h-4 w-32 rounded bg-gray-100" />
+        <div className="h-9 w-72 rounded bg-gray-100" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 h-64 rounded-lg bg-gray-100" />
+        <div className="h-64 rounded-lg bg-gray-100" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="h-28 rounded-lg bg-gray-100" />
+        <div className="h-28 rounded-lg bg-gray-100" />
+        <div className="h-28 rounded-lg bg-gray-100" />
+      </div>
     </div>
   );
 }
@@ -875,11 +1044,19 @@ function OverviewView({
   date,
   userName,
   googleCalendarConnected,
+  googleCalendarWriteAccess,
+  googleCalendarNeedsReconnect,
+  unsyncedScheduledCount,
   googleCalendarEmail,
-  googleCalendarEvents,
+  calendarOnlyEvents,
   googleCalendarLoading,
   connectingCalendar,
   onConnectCalendar,
+  syncingCalendar,
+  onSyncCalendar,
+  calendarSyncMessage,
+  scheduledPosts,
+  onSelectScheduledPost,
 }: {
   companyId?: string;
   company: Company | null;
@@ -904,11 +1081,19 @@ function OverviewView({
   date: string;
   userName?: string;
   googleCalendarConnected: boolean;
+  googleCalendarWriteAccess: boolean;
+  googleCalendarNeedsReconnect: boolean;
+  unsyncedScheduledCount: number;
   googleCalendarEmail: string;
-  googleCalendarEvents: GoogleCalendarEvent[];
+  calendarOnlyEvents: GoogleCalendarEvent[];
   googleCalendarLoading: boolean;
   connectingCalendar: boolean;
   onConnectCalendar: () => void;
+  syncingCalendar: boolean;
+  onSyncCalendar: () => void;
+  calendarSyncMessage: string | null;
+  scheduledPosts: Array<{ id: string; title: string; start: string; type: string; inGoogleCalendar?: boolean; calendarEventId?: string | null }>;
+  onSelectScheduledPost?: () => void;
 }) {
   const info = {
     name: company?.name || "",
@@ -934,41 +1119,110 @@ function OverviewView({
         </button>
       </div>
 
-      {/* Meetings Section */}
+      {/* Calendar — meetings + scheduled posts */}
       <div>
         <div className="flex items-center gap-2 mb-4">
           <Calendar className="h-5 w-5 text-gray-700" />
-          <h2 className="text-lg font-semibold text-gray-900">Meetings</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Calendar</h2>
+          {scheduledPosts.length > 0 && (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">
+              {scheduledPosts.length} scheduled post{scheduledPosts.length === 1 ? "" : "s"}
+            </span>
+          )}
         </div>
+
+        {(unsyncedScheduledCount > 0 || googleCalendarNeedsReconnect) && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {googleCalendarNeedsReconnect ? (
+              <p>
+                Google Calendar is linked but cannot add events yet.{" "}
+                <button type="button" onClick={onConnectCalendar} className="font-semibold underline">
+                  Reconnect calendar
+                </button>{" "}
+                to see scheduled tweets in the Google Calendar app on your phone.
+              </p>
+            ) : (
+              <p>
+                {unsyncedScheduledCount} scheduled tweet{unsyncedScheduledCount === 1 ? "" : "s"} only in Plinth — not in Google Calendar yet.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {googleCalendarConnected ? (
             <>
               <div className="lg:col-span-2 border border-gray-200 rounded-lg overflow-hidden">
                 <GoogleMeetingsCalendar
-                  events={googleCalendarEvents}
+                  events={calendarOnlyEvents}
+                  scheduledPosts={scheduledPosts}
                   loading={googleCalendarLoading}
                   email={googleCalendarEmail}
+                  onSelectScheduledPost={onSelectScheduledPost}
                 />
               </div>
               <div className="border border-gray-200 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Upcoming meetings
+                  Upcoming
                 </h3>
                 <p className="text-sm text-gray-600 mb-4">
                   {googleCalendarEmail
-                    ? `Connected as ${googleCalendarEmail}`
+                    ? googleCalendarWriteAccess
+                      ? `Connected as ${googleCalendarEmail}. Scheduled tweets show once here and sync to Google Calendar on your phone.`
+                      : `Connected as ${googleCalendarEmail}, but calendar write access is missing. Reconnect below.`
                     : "Your Google Calendar is connected."}
                 </p>
+                {(unsyncedScheduledCount > 0 || googleCalendarNeedsReconnect) && (
+                  <div className="mb-4">
+                    {googleCalendarNeedsReconnect ? (
+                      <Button
+                        className="w-full bg-gray-900 hover:bg-gray-800 text-white"
+                        onClick={onConnectCalendar}
+                        disabled={connectingCalendar || !companyId}
+                      >
+                        {connectingCalendar ? "Connecting..." : "Reconnect Google Calendar"}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={onSyncCalendar}
+                        disabled={syncingCalendar || !companyId}
+                      >
+                        {syncingCalendar ? "Syncing..." : "Add tweets to Google Calendar"}
+                      </Button>
+                    )}
+                    {calendarSyncMessage && (
+                      <p className="text-xs text-gray-500 mt-2">{calendarSyncMessage}</p>
+                    )}
+                  </div>
+                )}
                 {googleCalendarLoading ? (
                   <div className="flex justify-center py-8">
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-gray-900" />
                   </div>
-                ) : googleCalendarEvents.length === 0 ? (
-                  <p className="text-sm text-gray-500">No upcoming meetings this week.</p>
+                ) : calendarOnlyEvents.length === 0 && scheduledPosts.length === 0 ? (
+                  <p className="text-sm text-gray-500">Nothing scheduled this week.</p>
                 ) : (
                   <div className="space-y-3">
-                    {googleCalendarEvents.slice(0, 5).map((event) => (
+                    {scheduledPosts.slice(0, 5).map((post) => (
+                      <button
+                        key={post.id}
+                        type="button"
+                        onClick={onSelectScheduledPost}
+                        className="w-full text-left rounded-lg border border-sky-100 bg-sky-50/50 p-3 hover:bg-sky-50 transition-colors"
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-600 mb-0.5">
+                          Scheduled {post.type === "tweet" ? "Tweet" : post.type}
+                          {post.inGoogleCalendar ? " · 📅 Google Calendar" : " · Plinth only"}
+                        </p>
+                        <p className="text-sm font-medium text-gray-900 line-clamp-2">{post.title}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {formatScheduledPostTime(post.start)}
+                        </p>
+                      </button>
+                    ))}
+                    {calendarOnlyEvents.slice(0, 5).map((event) => (
                       <div
                         key={event.id}
                         className="rounded-lg border border-gray-100 bg-gray-50 p-3"
@@ -987,24 +1241,33 @@ function OverviewView({
               </div>
             </>
           ) : (
-            <div className="lg:col-span-3 border border-gray-200 rounded-lg p-8 flex flex-col items-center text-center max-w-2xl mx-auto">
-              <Calendar className="h-12 w-12 text-gray-300 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Prep for your meetings that matter most
-              </h3>
-              <p className="text-sm text-gray-600 mb-6 max-w-md">
-                Connect your Google Calendar to highlight meetings that help you
-                close deals.
-              </p>
-              <Button
-                className="bg-gray-900 hover:bg-gray-800 text-white"
-                onClick={onConnectCalendar}
-                disabled={connectingCalendar || !companyId}
-              >
-                <Inbox className="h-4 w-4 mr-2" />
-                {connectingCalendar ? "Connecting..." : "Connect your calendar"}
-              </Button>
-            </div>
+            <>
+              <div className="lg:col-span-2 border border-gray-200 rounded-lg overflow-hidden">
+                <GoogleMeetingsCalendar
+                  events={[]}
+                  scheduledPosts={scheduledPosts}
+                  loading={false}
+                  email=""
+                  onSelectScheduledPost={onSelectScheduledPost}
+                />
+              </div>
+              <div className="border border-gray-200 rounded-lg p-6 flex flex-col">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Google Calendar
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Connect Google Calendar to see scheduled tweets on your phone — same account as the Google Calendar app.
+                </p>
+                <Button
+                  className="bg-gray-900 hover:bg-gray-800 text-white mt-auto"
+                  onClick={onConnectCalendar}
+                  disabled={connectingCalendar || !companyId}
+                >
+                  <Inbox className="h-4 w-4 mr-2" />
+                  {connectingCalendar ? "Connecting..." : "Connect calendar"}
+                </Button>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -1497,14 +1760,67 @@ function formatEventTime(event: GoogleCalendarEvent): string {
   return endPart ? `${datePart} · ${timePart} – ${endPart}` : `${datePart} · ${timePart}`;
 }
 
+function formatScheduledPostTime(iso: string) {
+  try {
+    return new Date(iso).toLocaleString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+/** Hide Google Calendar events that are already shown as Plinth scheduled posts. */
+function filterLinkedCalendarEvents(
+  events: GoogleCalendarEvent[],
+  scheduledPosts: Array<{ calendarEventId?: string | null; inGoogleCalendar?: boolean; title: string; start: string }>,
+): GoogleCalendarEvent[] {
+  const linkedIds = new Set(
+    scheduledPosts
+      .map((p) => p.calendarEventId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  const syncedPosts = scheduledPosts.filter((p) => p.inGoogleCalendar);
+
+  return events.filter((event) => {
+    if (linkedIds.has(event.id)) return false;
+
+    // Fallback when calendarEventId wasn't stored yet
+    const isPlinthEvent =
+      event.title.startsWith("Twitter/X:") ||
+      event.title.startsWith("LinkedIn:") ||
+      event.title.startsWith("tweet:");
+
+    if (!isPlinthEvent) return true;
+
+    const eventStart = new Date(event.start).getTime();
+    return !syncedPosts.some((post) => {
+      const postStart = new Date(post.start).getTime();
+      const titleSnippet = post.title.toLowerCase().slice(0, 24);
+      const titleMatch = titleSnippet.length > 0 && event.title.toLowerCase().includes(titleSnippet);
+      const timeMatch = Math.abs(eventStart - postStart) < 5 * 60 * 1000;
+      return titleMatch && timeMatch;
+    });
+  });
+}
+
 function GoogleMeetingsCalendar({
   events,
+  scheduledPosts = [],
   loading,
   email,
+  onSelectScheduledPost,
 }: {
   events: GoogleCalendarEvent[];
+  scheduledPosts?: Array<{ id: string; title: string; start: string; type: string; inGoogleCalendar?: boolean; calendarEventId?: string | null }>;
   loading: boolean;
   email: string;
+  onSelectScheduledPost?: () => void;
 }) {
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const today = new Date();
@@ -1522,6 +1838,22 @@ function GoogleMeetingsCalendar({
     return d.toISOString().slice(0, 10);
   }
 
+  function postDayKey(iso: string) {
+    const d = new Date(iso);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 7);
+
+  const weekScheduledPosts = scheduledPosts.filter((post) => {
+    const d = new Date(post.start);
+    return d >= weekStart && d < weekEnd;
+  });
+
   function eventDayKey(event: GoogleCalendarEvent) {
     if (!event.start) return "";
     return event.start.slice(0, 10);
@@ -1533,6 +1865,15 @@ function GoogleMeetingsCalendar({
     if (!eventsByDay[key]) eventsByDay[key] = [];
     eventsByDay[key].push(event);
   });
+
+  const postsByDay: Record<string, typeof scheduledPosts> = {};
+  weekScheduledPosts.forEach((post) => {
+    const key = postDayKey(post.start);
+    if (!postsByDay[key]) postsByDay[key] = [];
+    postsByDay[key].push(post);
+  });
+
+  const hasAnything = events.length > 0 || weekScheduledPosts.length > 0;
 
   return (
     <div className="p-4">
@@ -1553,6 +1894,7 @@ function GoogleMeetingsCalendar({
             const key = dayKey(d);
             const isToday = key === dayKey(today);
             const dayEvents = eventsByDay[key] ?? [];
+            const dayPosts = postsByDay[key] ?? [];
             return (
               <div key={key} className="min-w-0">
                 <div
@@ -1573,6 +1915,17 @@ function GoogleMeetingsCalendar({
                   }`}
                 >
                   <div className="space-y-1">
+                    {dayPosts.map((post) => (
+                      <button
+                        key={post.id}
+                        type="button"
+                        onClick={onSelectScheduledPost}
+                        className="w-full text-left text-[10px] px-1.5 py-1 rounded bg-sky-50 text-sky-800 border border-sky-200 leading-tight truncate hover:bg-sky-100"
+                        title={post.title}
+                      >
+                        {post.type === "tweet" ? "𝕏 " : ""}{post.title}
+                      </button>
+                    ))}
                     {dayEvents.slice(0, 3).map((event) => (
                       <div
                         key={event.id}
@@ -1582,9 +1935,9 @@ function GoogleMeetingsCalendar({
                         {event.title}
                       </div>
                     ))}
-                    {dayEvents.length > 3 && (
+                    {dayPosts.length + dayEvents.length > 3 && (
                       <span className="text-[10px] text-gray-400 px-1">
-                        +{dayEvents.length - 3} more
+                        +{dayPosts.length + dayEvents.length - 3} more
                       </span>
                     )}
                   </div>
@@ -1595,9 +1948,9 @@ function GoogleMeetingsCalendar({
         </div>
       )}
 
-      {!loading && events.length === 0 && (
+      {!loading && !hasAnything && (
         <p className="text-center text-sm text-gray-500 py-6">
-          No meetings scheduled this week.
+          No meetings or scheduled posts this week.
         </p>
       )}
     </div>

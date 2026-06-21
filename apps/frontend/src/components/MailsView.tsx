@@ -258,7 +258,7 @@ export function MailsView({ companyId }: Props) {
   // If not connected, show clean connection view
   if (!isConnected) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center text-center p-8 bg-slate-50 min-h-[calc(100vh-3.5rem)]">
+      <div className="flex h-full min-h-0 flex-col items-center justify-center text-center p-8 bg-slate-50">
         <div className="h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-4 shadow-inner">
           <Mail className="h-8 w-8 text-blue-500" />
         </div>
@@ -282,7 +282,7 @@ export function MailsView({ companyId }: Props) {
   }
 
   return (
-    <div className="flex flex-1 overflow-hidden bg-slate-50 h-[calc(100vh-3.5rem)]">
+    <div className="flex h-full min-h-0 overflow-hidden bg-slate-50">
       {/* LEFT PANEL: Email List */}
       <div className="w-[380px] border-r border-gray-200 bg-white flex flex-col flex-shrink-0">
         {/* Search and Action Bar */}
