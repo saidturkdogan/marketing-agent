@@ -28,9 +28,14 @@ export interface StrategyRequest {
 }
 
 let tokenGetter: () => Promise<string | null> = async () => null;
+let tokenRefresher: () => Promise<string | null> = async () => null;
 
-export function setTokenGetter(fn: () => Promise<string | null>) {
+export function setTokenGetter(
+  fn: () => Promise<string | null>,
+  refresher?: () => Promise<string | null>,
+) {
   tokenGetter = fn;
+  tokenRefresher = refresher ?? fn;
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -50,10 +55,9 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   let token = await tokenGetter();
   let response = await doRequest(token);
 
-  if (response.status === 403) {
-    console.warn(`[api] 403 on ${options?.method || "GET"} ${url}, retrying with fresh token...`);
-    await new Promise((r) => setTimeout(r, 500));
-    token = await tokenGetter();
+  if (response.status === 401 || response.status === 403) {
+    console.warn(`[api] ${response.status} on ${options?.method || "GET"} ${url}, retrying with fresh token...`);
+    token = await tokenRefresher();
     response = await doRequest(token);
   }
 
@@ -157,16 +161,60 @@ export function getGmailStatus(companyId: string) {
   return request<{ connected: boolean; companyId: string }>(`/api/gmail/status/${companyId}`);
 }
 
-export function fetchGmailEmails(companyId: string, maxResults = 20) {
+export function fetchGmailEmails(companyId: string, maxResults = 50) {
   return request<{ fetched: number; companyId: string }>(`/api/gmail/fetch/${companyId}?maxResults=${maxResults}`, {
     method: "POST",
   });
 }
 
 export function getGmailMessages(companyId: string) {
-  return request<Array<{ id: number; messageId: string; from: string; to: string; subject: string; snippet: string; receivedAt: string }>>(
+  return request<Array<{ id: number; messageId: string; from: string; to: string; subject: string; snippet: string; body?: string; receivedAt: string }>>(
     `/api/gmail/messages/${companyId}`
   );
+}
+
+export function sendGmailEmail(companyId: string, to: string, subject: string, body: string, threadId?: string) {
+  return request<{ status: string }>("/api/gmail/send", {
+    method: "POST",
+    body: JSON.stringify({ companyId, to, subject, body, threadId }),
+  });
+}
+
+export function draftGmailReply(companyId: string, emailSubject: string, emailBody: string, senderName: string) {
+  return request<{ draft: string }>("/api/gmail/draft-reply", {
+    method: "POST",
+    body: JSON.stringify({ companyId, emailSubject, emailBody, senderName }),
+  });
+}
+
+// Google Calendar
+export type GoogleCalendarEvent = {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  location: string;
+  allDay: boolean;
+  htmlLink: string;
+};
+
+export function getGoogleCalendarAuthUrl(companyId: string) {
+  return request<{ url: string }>(`/api/calendar/auth-url?companyId=${encodeURIComponent(companyId)}`);
+}
+
+export function getGoogleCalendarStatus(companyId: string) {
+  return request<{ connected: boolean; companyId: string; email?: string }>(
+    `/api/calendar/status/${companyId}`,
+  );
+}
+
+export function getGoogleCalendarEvents(companyId: string, days = 7) {
+  return request<{
+    connected: boolean;
+    companyId: string;
+    email?: string;
+    events: GoogleCalendarEvent[];
+  }>(`/api/calendar/events/${companyId}?days=${days}`);
 }
 
 // Campaigns
@@ -352,4 +400,134 @@ export function publishCampaignToInstagram(campaignId: string, payload?: { capti
 
 export function publishCampaignToTwitter(campaignId: string) {
   return request<PublishResponse>(`/api/campaigns/${campaignId}/publish/twitter`, { method: "POST" });
+}
+
+// ── Content Creator API ──────────────────────────────────────
+
+import type { ContentItem, CreateContentRequest } from "./types";
+
+export function listContents(companyId: string) {
+  return request<ContentItem[]>(`/api/content/${companyId}`);
+}
+
+export function getContent(companyId: string, contentId: string) {
+  return request<ContentItem>(`/api/content/${companyId}/${contentId}`);
+}
+
+export function generateContent(companyId: string, payload: CreateContentRequest) {
+  return request<ContentItem>(`/api/content/${companyId}/generate`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateContent(companyId: string, contentId: string, updates: Partial<ContentItem>) {
+  return request<ContentItem>(`/api/content/${companyId}/${contentId}`, {
+    method: "PUT",
+    body: JSON.stringify(updates),
+  });
+}
+
+export function deleteContent(companyId: string, contentId: string) {
+  return request<{ status: string; contentId: string }>(`/api/content/${companyId}/${contentId}`, {
+    method: "DELETE",
+  });
+}
+
+export function generateContentImage(companyId: string, contentId: string, prompt: string) {
+  return request<{ contentId: string; imageUrl: string }>(`/api/content/${companyId}/${contentId}/generate-image`, {
+    method: "POST",
+    body: JSON.stringify({ prompt }),
+  });
+}
+
+// Twitter Auth
+export function getTwitterAuthUrl(companyId: string) {
+  return request<{ url: string; configured: boolean; message?: string }>(`/api/twitter/auth-url?companyId=${encodeURIComponent(companyId)}`);
+}
+
+export function getTwitterStatus(companyId: string) {
+  return request<{ connected: boolean; configured: boolean; staticFallback?: boolean; screenName?: string; twitterUserId?: string }>(`/api/twitter/status/${companyId}`);
+}
+
+export function publishContent(companyId: string, contentId: string) {
+  return request<PublishResponse>(`/api/content/${companyId}/${contentId}/publish`, {
+    method: "POST",
+  });
+}
+
+export function scheduleContent(companyId: string, contentId: string, scheduledAt: string) {
+  return request<{ contentId: string; status: string; scheduledAt: string; calendarEventCreated: boolean }>(
+    `/api/content/${companyId}/${contentId}/schedule`,
+    {
+      method: "POST",
+      body: JSON.stringify({ scheduledAt }),
+    }
+  );
+}
+
+// Agent
+export interface AgentStatus {
+  companyId: string;
+  autopilotEnabled: boolean;
+  twitterPostsPerWeek: number;
+  emailDraftsPerWeek: number;
+  outreachEnabled?: boolean;
+  lastRunAt?: string;
+  lastRunStatus?: string;
+  lastRunMessage?: string;
+  scheduledCount: number;
+  pendingApprovalsCount: number;
+  pendingApprovalContentCount?: number;
+  twitterConnected: boolean;
+  gmailConnected: boolean;
+  calendarConnected: boolean;
+}
+
+export function getAgentStatus(companyId: string) {
+  return request<AgentStatus>(`/api/agent/status/${companyId}`);
+}
+
+export function getAgentConfig(companyId: string) {
+  return request<Record<string, unknown>>(`/api/agent/config/${companyId}`);
+}
+
+export function updateAgentConfig(companyId: string, config: Record<string, unknown>) {
+  return request<Record<string, unknown>>(`/api/agent/config/${companyId}`, {
+    method: "PUT",
+    body: JSON.stringify(config),
+  });
+}
+
+export function runAgent(companyId: string) {
+  return request<{ status: string; message?: string; created?: number; scheduled?: number; pendingApproval?: number }>(
+    `/api/agent/run/${companyId}`,
+    { method: "POST" }
+  );
+}
+
+export interface ApprovalItem {
+  approvalId: string;
+  companyId?: string;
+  contentId?: string;
+  requestReason?: string;
+  status: string;
+}
+
+export function listApprovals(companyId: string) {
+  return request<ApprovalItem[]>(`/api/approvals/${companyId}`);
+}
+
+export function approveContent(approvalId: string, reviewerNotes?: string) {
+  return request<Record<string, unknown>>(`/api/approvals/${approvalId}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ reviewerNotes: reviewerNotes ?? "" }),
+  });
+}
+
+export function rejectContent(approvalId: string, reviewerNotes?: string) {
+  return request<Record<string, unknown>>(`/api/approvals/${approvalId}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reviewerNotes: reviewerNotes ?? "Rejected" }),
+  });
 }

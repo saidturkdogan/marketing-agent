@@ -2,32 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login, register } from "../api";
 import { useAuthStore } from "../stores/authStore";
-
-function PlinthLogo({ size = 48 }: { size?: number }) {
-  const s = size;
-  return (
-    <svg
-      width={s}
-      height={s}
-      viewBox="0 0 48 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <linearGradient id="plogologin" x1="0" y1="0" x2="48" y2="48">
-          <stop stopColor="#2563eb" />
-          <stop offset="1" stopColor="#1d4ed8" />
-        </linearGradient>
-      </defs>
-      <rect width="48" height="48" rx="12" fill="url(#plogologin)" />
-      <path
-        d="M16 12h7v24h-7zM23 12h11v14h-11zM28.5 15.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z"
-        fill="white"
-        fillRule="evenodd"
-      />
-    </svg>
-  );
-}
+import { PlinthLogo } from "../components/PlinthLogo";
+import { Loader2 } from "lucide-react";
 
 export function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
@@ -59,23 +35,23 @@ export function LoginPage() {
   }
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
+    <div className="flex h-screen w-screen items-center justify-center bg-slate-50 overflow-hidden font-sans">
+      <div className="w-full max-w-md p-8 bg-white rounded-2xl border border-slate-200 shadow-xl">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <PlinthLogo size={42} />
-          <h1 className="text-xl font-bold text-white">Plinth</h1>
+        <div className="flex items-center justify-center gap-2.5 mb-6">
+          <PlinthLogo size={32} />
+          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Plinth</h1>
         </div>
 
-        <h2 className="text-2xl font-bold text-white mb-1 text-center">
+        <h2 className="text-xl font-bold text-slate-800 mb-1 text-center">
           {isRegister ? "Create account" : "Welcome back"}
         </h2>
-        <p className="text-neutral-400 text-sm text-center mb-8">
+        <p className="text-slate-500 text-xs text-center mb-8">
           {isRegister ? "Start creating AI-powered marketing content" : "Sign in to your account to continue"}
         </p>
 
         {error && (
-          <div className="mb-6 rounded-lg border border-red-600/30 bg-red-600/10 px-4 py-3 text-sm text-red-400">
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 font-semibold animate-fadeIn text-center">
             {error}
           </div>
         )}
@@ -83,10 +59,10 @@ export function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {isRegister && (
             <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-1.5">Name</label>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Name</label>
               <input
                 type="text"
-                className="auth-input"
+                className="w-full h-11 px-4 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-sm focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-100 transition-all placeholder-slate-400"
                 placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -96,10 +72,10 @@ export function LoginPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-1.5">Email</label>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Email</label>
             <input
               type="email"
-              className="auth-input"
+              className="w-full h-11 px-4 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-sm focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-100 transition-all placeholder-slate-400"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -108,10 +84,10 @@ export function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-1.5">Password</label>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Password</label>
             <input
               type="password"
-              className="auth-input"
+              className="w-full h-11 px-4 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-sm focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-100 transition-all placeholder-slate-400"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -120,8 +96,18 @@ export function LoginPage() {
             />
           </div>
 
-          <button type="submit" className="auth-btn" disabled={loading}>
-            {loading ? "Please wait..." : isRegister ? "Create account" : "Sign in"}
+          <button
+            type="submit"
+            className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md mt-6"
+            disabled={loading}
+          >
+            {loading ? (
+              <><Loader2 className="h-4 w-4 animate-spin text-white" /> Please wait...</>
+            ) : isRegister ? (
+              "Create account"
+            ) : (
+              "Sign in"
+            )}
           </button>
         </form>
 
@@ -131,7 +117,7 @@ export function LoginPage() {
               setIsRegister(!isRegister);
               setError("");
             }}
-            className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
+            className="text-xs text-slate-500 hover:text-slate-800 transition-colors font-medium"
           >
             {isRegister ? "Already have an account? Sign in" : "Don't have an account? Create one"}
           </button>

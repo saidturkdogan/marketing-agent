@@ -33,6 +33,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/gmail/callback").permitAll()
+                        .requestMatchers("/api/calendar/callback").permitAll()
+                        .requestMatchers("/api/twitter/auth-url").permitAll()
+                        .requestMatchers("/api/twitter/callback").permitAll()
+                        .requestMatchers("/api/twitter/status/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated()
                 )

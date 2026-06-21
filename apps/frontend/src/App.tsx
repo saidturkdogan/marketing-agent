@@ -9,6 +9,7 @@ import { OnboardingPage } from "./pages/OnboardingPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { AnalysisReportPage } from "./pages/AnalysisReportPage";
 import { ProgressivePipelinePage } from "./pages/ProgressivePipelinePage";
+import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
 
 type Props = { clerkEnabled: boolean };
 
@@ -26,14 +27,16 @@ function ClerkApp() {
   const syncedRef = useRef(false);
 
   useEffect(() => {
-    setTokenGetter(async () => {
-      if (!isSignedIn) return null;
-      const t = await getToken();
-      if (!t) {
-        console.warn("[auth] Clerk getToken() returned null despite isSignedIn=true");
-      }
-      return t ?? null;
-    });
+    setTokenGetter(
+      async () => {
+        if (!isSignedIn) return null;
+        return (await getToken()) ?? null;
+      },
+      async () => {
+        if (!isSignedIn) return null;
+        return (await getToken({ skipCache: true })) ?? null;
+      },
+    );
   }, [isSignedIn, getToken]);
 
   useEffect(() => {
@@ -66,6 +69,7 @@ function ClerkApp() {
       <Route path="/pipeline/:companyId" element={isSignedIn ? <ProgressivePipelinePage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/:companyId" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
       <Route path="*" element={<Navigate to={isSignedIn ? "/dashboard/" : "/login"} replace />} />
     </Routes>
   );
@@ -86,6 +90,7 @@ function DefaultApp() {
       <Route path="/pipeline/:companyId" element={token ? <ProgressivePipelinePage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/:companyId" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
       <Route path="*" element={<Navigate to={token ? "/dashboard/" : "/login"} replace />} />
     </Routes>
   );

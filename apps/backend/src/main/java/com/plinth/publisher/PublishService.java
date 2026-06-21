@@ -26,6 +26,10 @@ public class PublishService {
     }
 
     public PublishResult publishTwitter(String content) {
-        return twitterPublisherService.publishTweet(content);
+        throw new UnsupportedOperationException("Use publishTwitter(content, companyId) instead");
+    }
+
+    public PublishResult publishTwitter(String content, String companyId) {
+        return twitterPublisherService.publishTweet(content, companyId);
     }
 }

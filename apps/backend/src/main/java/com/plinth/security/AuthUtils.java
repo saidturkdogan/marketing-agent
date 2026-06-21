@@ -14,4 +14,12 @@ public class AuthUtils {
         }
         throw new IllegalStateException("User not authenticated");
     }
+
+    public String getCurrentUserEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof AppUserDetails userDetails) {
+            return userDetails.getUsername();
+        }
+        return "system";
+    }
 }

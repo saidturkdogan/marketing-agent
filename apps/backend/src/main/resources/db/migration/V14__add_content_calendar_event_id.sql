@@ -1,0 +1,1 @@
+ALTER TABLE contents ADD COLUMN IF NOT EXISTS calendar_event_id VARCHAR(255);

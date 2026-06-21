@@ -54,8 +54,18 @@ app:
     api-secret: ${TWITTER_API_SECRET:}
     access-token: ${TWITTER_ACCESS_TOKEN:}
     access-secret: ${TWITTER_ACCESS_SECRET:}
+    screen-name: ${TWITTER_SCREEN_NAME:Static Token}
+    callback-url: ${TWITTER_CALLBACK_URL:http://localhost:8080/api/twitter/callback}
+    frontend-redirect: ${TWITTER_FRONTEND_REDIRECT:http://localhost:5173/dashboard}
   gmail:
     client-id: ${GMAIL_CLIENT_ID:}
     client-secret: ${GMAIL_CLIENT_SECRET:}
     redirect-uri: ${GMAIL_REDIRECT_URI:http://localhost:8080/api/gmail/callback}
     frontend-redirect: ${GMAIL_FRONTEND_REDIRECT:http://localhost:5173/onboarding}
+  google-calendar:
+    client-id: ${GMAIL_CLIENT_ID:}
+    client-secret: ${GMAIL_CLIENT_SECRET:}
+    redirect-uri: ${GOOGLE_CALENDAR_REDIRECT_URI:http://localhost:8080/api/calendar/callback}
+    frontend-redirect: ${GOOGLE_CALENDAR_FRONTEND_REDIRECT:http://localhost:5173/dashboard}
+  openai:
+    api-key: ${OPENAI_API_KEY:}

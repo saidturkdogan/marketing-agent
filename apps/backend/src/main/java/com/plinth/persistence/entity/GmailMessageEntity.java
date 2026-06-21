@@ -24,10 +24,10 @@ public class GmailMessageEntity {
     @Column(name = "message_id", nullable = false, length = 500)
     private String messageId;
 
-    @Column(length = 500)
+    @Column(name = "from_addr", length = 500)
     private String from;
 
-    @Column(length = 500)
+    @Column(name = "to_addr", length = 500)
     private String to;
 
     @Column(length = 1000)
@@ -35,6 +35,9 @@ public class GmailMessageEntity {
 
     @Column(columnDefinition = "text")
     private String snippet;
+
+    @Column(columnDefinition = "text")
+    private String body;
 
     @Column(name = "received_at")
     private OffsetDateTime receivedAt;
@@ -60,6 +63,8 @@ public class GmailMessageEntity {
     public void setSubject(String subject) { this.subject = subject; }
     public String getSnippet() { return snippet; }
     public void setSnippet(String snippet) { this.snippet = snippet; }
+    public String getBody() { return body; }
+    public void setBody(String body) { this.body = body; }
     public OffsetDateTime getReceivedAt() { return receivedAt; }
     public void setReceivedAt(OffsetDateTime receivedAt) { this.receivedAt = receivedAt; }
     public OffsetDateTime getFetchedAt() { return fetchedAt; }

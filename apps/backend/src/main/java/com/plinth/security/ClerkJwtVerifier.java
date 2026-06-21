@@ -63,6 +63,7 @@ public class ClerkJwtVerifier {
         }
 
         return Jwts.parser()
+                .clockSkewSeconds(60)
                 .verifyWith(publicKey)
                 .requireIssuer(issuer)
                 .build()

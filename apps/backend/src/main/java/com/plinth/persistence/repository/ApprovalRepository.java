@@ -10,4 +10,6 @@ public interface ApprovalRepository extends JpaRepository<ApprovalEntity, Long> 
     List<ApprovalEntity> findByCampaignIdOrderByRequestedAtDesc(String campaignId);
     Optional<ApprovalEntity> findByApprovalId(String approvalId);
     List<ApprovalEntity> findByCampaignIdAndStatus(String campaignId, String status);
+    List<ApprovalEntity> findByCompanyIdAndStatusOrderByRequestedAtDesc(String companyId, String status);
+    Optional<ApprovalEntity> findTopByContentIdAndStatusOrderByRequestedAtDesc(String contentId, String status);
 }

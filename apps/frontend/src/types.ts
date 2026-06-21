@@ -452,3 +452,31 @@ export interface ProgressiveRequest {
   competitorUrls?: string[];
   strategyId?: string;
 }
+
+// ── Content Creator Types ────────────────────────────────────
+
+export type ContentType = "tweet" | "linkedin_post" | "blog" | "newsletter";
+export type ContentStatus = "draft" | "scheduled" | "published";
+
+export interface ContentItem {
+  contentId: string;
+  companyId: string;
+  type: ContentType;
+  title: string;
+  body: string;
+  hashtags: string[];
+  imageUrl?: string | null;
+  status: ContentStatus;
+  platformPostId?: string | null;
+  platformUrl?: string | null;
+  scheduledAt?: string | null;
+  publishedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateContentRequest {
+  type: ContentType;
+  topic: string;
+  additionalContext?: string;
+}

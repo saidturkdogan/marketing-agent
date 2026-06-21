@@ -22,8 +22,14 @@ public class ApprovalEntity {
     @Column(name = "approval_id", nullable = false, unique = true)
     private String approvalId;
 
-    @Column(name = "campaign_id", nullable = false)
+    @Column(name = "campaign_id")
     private String campaignId;
+
+    @Column(name = "company_id", length = 255)
+    private String companyId;
+
+    @Column(name = "content_id", length = 36)
+    private String contentId;
 
     @Column(name = "step_name", nullable = false)
     private String stepName;
@@ -60,6 +66,10 @@ public class ApprovalEntity {
     public void setApprovalId(String approvalId) { this.approvalId = approvalId; }
     public String getCampaignId() { return campaignId; }
     public void setCampaignId(String campaignId) { this.campaignId = campaignId; }
+    public String getCompanyId() { return companyId; }
+    public void setCompanyId(String companyId) { this.companyId = companyId; }
+    public String getContentId() { return contentId; }
+    public void setContentId(String contentId) { this.contentId = contentId; }
     public String getStepName() { return stepName; }
     public void setStepName(String stepName) { this.stepName = stepName; }
     public String getStatus() { return status; }

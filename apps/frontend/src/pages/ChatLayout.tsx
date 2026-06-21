@@ -42,7 +42,17 @@ export function ChatLayout() {
 
   useEffect(() => { refreshCompanies(); }, [refreshCompanies]);
 
-  function handleLogout() { clearAuth(); navigate("/login", { replace: true }); }
+  async function handleLogout() {
+    if ((window as any).Clerk) {
+      try {
+        await (window as any).Clerk.signOut();
+      } catch (e) {
+        console.error("Clerk signout failed", e);
+      }
+    }
+    clearAuth();
+    navigate("/login", { replace: true });
+  }
 
   // --- Onboarding ---
   const [step, setStep] = useState<Step>("goal");

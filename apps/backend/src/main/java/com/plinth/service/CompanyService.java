@@ -43,6 +43,12 @@ public class CompanyService {
         return toProfile(findByCompanyIdAndUser(companyId, userId));
     }
 
+    public CompanyProfile getProfileInternal(String companyId) {
+        return companyRepository.findByCompanyId(companyId)
+                .map(this::toProfile)
+                .orElseThrow(() -> new IllegalArgumentException("Company not found: " + companyId));
+    }
+
     @Transactional
     public CompanyResponse createCompany(CompanyRequest request) {
         Long userId = authUtils.getCurrentUserId();

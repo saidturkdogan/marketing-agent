@@ -10,7 +10,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -83,5 +85,49 @@ public class ApprovalService {
 
     public List<ApprovalEntity> getApprovalHistory(String campaignId) {
         return approvalRepository.findByCampaignIdOrderByRequestedAtDesc(campaignId);
+    }
+
+    @Transactional
+    public ApprovalEntity requestContentApproval(String companyId, String contentId, GuardrailReport report) {
+        ApprovalEntity approval = new ApprovalEntity();
+        approval.setApprovalId(UUID.randomUUID().toString());
+        approval.setCompanyId(companyId);
+        approval.setContentId(contentId);
+        approval.setStepName("content_publish");
+        approval.setStatus("pending");
+        approval.setRequestReason(report.summary());
+
+        ApprovalEntity saved = approvalRepository.save(approval);
+        log.info("Content approval requested for company {} content {} (id={})",
+                companyId, contentId, saved.getApprovalId());
+        return saved;
+    }
+
+    public List<ApprovalEntity> getPendingForCompany(String companyId) {
+        return approvalRepository.findByCompanyIdAndStatusOrderByRequestedAtDesc(companyId, "pending");
+    }
+
+    public boolean isContentApproved(String contentId) {
+        return approvalRepository.findTopByContentIdAndStatusOrderByRequestedAtDesc(contentId, "approved").isPresent();
+    }
+
+    public boolean isContentRejected(String contentId) {
+        return approvalRepository.findTopByContentIdAndStatusOrderByRequestedAtDesc(contentId, "rejected").isPresent();
+    }
+
+    public Map<String, Object> toMap(ApprovalEntity approval) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("approvalId", approval.getApprovalId());
+        map.put("companyId", approval.getCompanyId());
+        map.put("contentId", approval.getContentId());
+        map.put("campaignId", approval.getCampaignId());
+        map.put("stepName", approval.getStepName());
+        map.put("status", approval.getStatus());
+        map.put("requestReason", approval.getRequestReason());
+        map.put("reviewerNotes", approval.getReviewerNotes());
+        map.put("reviewedBy", approval.getReviewedBy());
+        map.put("requestedAt", approval.getRequestedAt() != null ? approval.getRequestedAt().toString() : null);
+        map.put("reviewedAt", approval.getReviewedAt() != null ? approval.getReviewedAt().toString() : null);
+        return map;
     }
 }

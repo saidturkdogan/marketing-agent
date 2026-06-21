@@ -1,10 +1,13 @@
 package com.plinth.service;
 
 import com.google.api.client.auth.oauth2.Credential;
+import com.google.api.client.auth.oauth2.ClientParametersAuthentication;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeRequestUrl;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
+import com.google.api.client.googleapis.auth.oauth2.GoogleOAuthConstants;
 import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
+import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
@@ -14,7 +17,6 @@ import com.plinth.persistence.entity.GoogleCalendarTokenEntity;
 import com.plinth.persistence.repository.CompanyRepository;
 import com.plinth.persistence.repository.GmailTokenRepository;
 import com.plinth.persistence.repository.GoogleCalendarTokenRepository;
-import com.plinth.security.AuthUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +26,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 
 @Service
-public class GmailAuthService {
+public class GoogleCalendarAuthService {
 
     private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
     private static final List<String> SCOPES = List.of(
@@ -34,26 +36,23 @@ public class GmailAuthService {
             "https://www.googleapis.com/auth/userinfo.email"
     );
 
+    private final GoogleCalendarTokenRepository tokenRepository;
     private final GmailTokenRepository gmailTokenRepository;
-    private final GoogleCalendarTokenRepository googleCalendarTokenRepository;
     private final CompanyRepository companyRepository;
-    private final AuthUtils authUtils;
     private final String clientId;
     private final String clientSecret;
     private final String redirectUri;
 
-    public GmailAuthService(
+    public GoogleCalendarAuthService(
+            GoogleCalendarTokenRepository tokenRepository,
             GmailTokenRepository gmailTokenRepository,
-            GoogleCalendarTokenRepository googleCalendarTokenRepository,
             CompanyRepository companyRepository,
-            AuthUtils authUtils,
-            @Value("${app.gmail.client-id}") String clientId,
-            @Value("${app.gmail.client-secret}") String clientSecret,
-            @Value("${app.gmail.redirect-uri}") String redirectUri) {
+            @Value("${app.google-calendar.client-id}") String clientId,
+            @Value("${app.google-calendar.client-secret}") String clientSecret,
+            @Value("${app.google-calendar.redirect-uri}") String redirectUri) {
+        this.tokenRepository = tokenRepository;
         this.gmailTokenRepository = gmailTokenRepository;
-        this.googleCalendarTokenRepository = googleCalendarTokenRepository;
         this.companyRepository = companyRepository;
-        this.authUtils = authUtils;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.redirectUri = redirectUri;
@@ -61,12 +60,12 @@ public class GmailAuthService {
 
     public String generateAuthUrl(String companyId) {
         GoogleAuthorizationCodeFlow flow = createFlow();
-        GoogleAuthorizationCodeRequestUrl url = flow.newAuthorizationUrl()
+        return flow.newAuthorizationUrl()
                 .setRedirectUri(redirectUri)
                 .setState(companyId)
                 .setAccessType("offline")
-                .setApprovalPrompt("force");
-        return url.build();
+                .setApprovalPrompt("force")
+                .build();
     }
 
     @Transactional
@@ -78,101 +77,90 @@ public class GmailAuthService {
 
         CompanyEntity company = companyRepository.findByCompanyId(companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Company not found: " + companyId));
-        Long userId = company.getUserId();
         String email = extractEmail(flow, tokenResponse);
 
-        // Save Gmail Token
-        GmailTokenEntity existing = gmailTokenRepository.findByCompanyId(companyId).orElse(null);
-        if (existing != null) {
-            gmailTokenRepository.delete(existing);
-        }
-
-        GmailTokenEntity entity = new GmailTokenEntity();
-        entity.setUserId(userId);
+        // Save Calendar Token
+        GoogleCalendarTokenEntity entity = tokenRepository.findByCompanyId(companyId)
+                .orElseGet(GoogleCalendarTokenEntity::new);
+        entity.setUserId(company.getUserId());
         entity.setCompanyId(companyId);
         entity.setEmail(email);
         entity.setAccessToken(tokenResponse.getAccessToken());
-        entity.setRefreshToken(tokenResponse.getRefreshToken());
+        if (tokenResponse.getRefreshToken() != null) {
+            entity.setRefreshToken(tokenResponse.getRefreshToken());
+        }
         if (tokenResponse.getExpiresInSeconds() != null) {
             entity.setTokenExpiry(OffsetDateTime.now(ZoneOffset.UTC)
                     .plusSeconds(tokenResponse.getExpiresInSeconds()));
         }
-        gmailTokenRepository.save(entity);
+        tokenRepository.save(entity);
 
-        // Save Google Calendar Token automatically with the same credentials and scopes
-        GoogleCalendarTokenEntity calendarEntity = googleCalendarTokenRepository.findByCompanyId(companyId)
-                .orElseGet(GoogleCalendarTokenEntity::new);
-        calendarEntity.setUserId(userId);
-        calendarEntity.setCompanyId(companyId);
-        calendarEntity.setEmail(email);
-        calendarEntity.setAccessToken(tokenResponse.getAccessToken());
+        // Save Gmail Token automatically with the same credentials and scopes
+        GmailTokenEntity gmailEntity = gmailTokenRepository.findByCompanyId(companyId)
+                .orElseGet(GmailTokenEntity::new);
+        gmailEntity.setUserId(company.getUserId());
+        gmailEntity.setCompanyId(companyId);
+        gmailEntity.setEmail(email);
+        gmailEntity.setAccessToken(tokenResponse.getAccessToken());
         if (tokenResponse.getRefreshToken() != null) {
-            calendarEntity.setRefreshToken(tokenResponse.getRefreshToken());
+            gmailEntity.setRefreshToken(tokenResponse.getRefreshToken());
         }
         if (tokenResponse.getExpiresInSeconds() != null) {
-            calendarEntity.setTokenExpiry(OffsetDateTime.now(ZoneOffset.UTC)
+            gmailEntity.setTokenExpiry(OffsetDateTime.now(ZoneOffset.UTC)
                     .plusSeconds(tokenResponse.getExpiresInSeconds()));
         }
-        googleCalendarTokenRepository.save(calendarEntity);
+        gmailTokenRepository.save(gmailEntity);
 
         return email;
     }
 
-    public GmailTokenEntity getToken(String companyId) {
-        // Ensure lazy check is run so token is fetched if present in calendar
+    public GoogleCalendarTokenEntity getToken(String companyId) {
+        // Ensure lazy check is run so token is fetched if present in gmail
         isConnected(companyId);
-        return gmailTokenRepository.findByCompanyId(companyId)
-                .orElseThrow(() -> new IllegalArgumentException("Gmail not connected for this company"));
+        return tokenRepository.findByCompanyId(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("Google Calendar not connected for this company"));
     }
 
     @Transactional
     public boolean isConnected(String companyId) {
-        boolean exists = gmailTokenRepository.findByCompanyId(companyId).isPresent();
+        boolean exists = tokenRepository.findByCompanyId(companyId).isPresent();
         if (!exists) {
-            var calTokenOpt = googleCalendarTokenRepository.findByCompanyId(companyId);
-            if (calTokenOpt.isPresent()) {
-                var calToken = calTokenOpt.get();
-                GmailTokenEntity gmailEntity = new GmailTokenEntity();
-                gmailEntity.setUserId(calToken.getUserId());
-                gmailEntity.setCompanyId(companyId);
-                gmailEntity.setEmail(calToken.getEmail());
-                gmailEntity.setAccessToken(calToken.getAccessToken());
-                gmailEntity.setRefreshToken(calToken.getRefreshToken());
-                gmailEntity.setTokenExpiry(calToken.getTokenExpiry());
-                gmailTokenRepository.save(gmailEntity);
+            var gmailTokenOpt = gmailTokenRepository.findByCompanyId(companyId);
+            if (gmailTokenOpt.isPresent()) {
+                var gmailToken = gmailTokenOpt.get();
+                GoogleCalendarTokenEntity calendarEntity = new GoogleCalendarTokenEntity();
+                calendarEntity.setUserId(gmailToken.getUserId());
+                calendarEntity.setCompanyId(companyId);
+                calendarEntity.setEmail(gmailToken.getEmail());
+                calendarEntity.setAccessToken(gmailToken.getAccessToken());
+                calendarEntity.setRefreshToken(gmailToken.getRefreshToken());
+                calendarEntity.setTokenExpiry(gmailToken.getTokenExpiry());
+                tokenRepository.save(calendarEntity);
                 return true;
             }
         }
         return exists;
     }
 
-    public Credential loadCredential(GmailTokenEntity token) {
-        GoogleClientSecrets.Details details = new GoogleClientSecrets.Details();
-        details.setClientId(clientId);
-        details.setClientSecret(clientSecret);
-
-        GoogleClientSecrets clientSecrets = new GoogleClientSecrets().setInstalled(details);
+    public Credential loadCredential(GoogleCalendarTokenEntity token) {
+        GoogleAuthorizationCodeFlow flow = createFlow();
         NetHttpTransport transport = new NetHttpTransport();
-
-        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-                transport, JSON_FACTORY, clientSecrets, SCOPES)
-                .setAccessType("offline")
-                .build();
-
         Credential credential = new Credential.Builder(flow.getMethod())
                 .setTransport(transport)
                 .setJsonFactory(JSON_FACTORY)
-                .setClientAuthentication(flow.getClientAuthentication())
-                .setTokenServerUrl(flow.getTokenServerEncodedUrl() != null
-                        ? new com.google.api.client.http.GenericUrl(flow.getTokenServerEncodedUrl())
-                        : new com.google.api.client.http.GenericUrl("https://oauth2.googleapis.com/token"))
+                .setClientAuthentication(new ClientParametersAuthentication(clientId, clientSecret))
+                .setTokenServerUrl(new GenericUrl(GoogleOAuthConstants.TOKEN_SERVER_URL))
                 .build()
                 .setAccessToken(token.getAccessToken())
                 .setRefreshToken(token.getRefreshToken());
 
-        if (token.getTokenExpiry() != null
-                && token.getTokenExpiry().isBefore(OffsetDateTime.now(ZoneOffset.UTC))
-                && credential.getRefreshToken() != null) {
+        if (token.getTokenExpiry() != null) {
+            credential.setExpirationTimeMilliseconds(
+                    token.getTokenExpiry().toInstant().toEpochMilli());
+        }
+
+        Long expiresIn = credential.getExpiresInSeconds();
+        if (expiresIn != null && expiresIn <= 60 && credential.getRefreshToken() != null) {
             try {
                 credential.refreshToken();
                 token.setAccessToken(credential.getAccessToken());
@@ -180,9 +168,9 @@ public class GmailAuthService {
                     token.setTokenExpiry(OffsetDateTime.now(ZoneOffset.UTC)
                             .plusSeconds(credential.getExpiresInSeconds()));
                 }
-                gmailTokenRepository.save(token);
+                tokenRepository.save(token);
             } catch (Exception e) {
-                throw new RuntimeException("Failed to refresh Gmail token", e);
+                throw new RuntimeException("Failed to refresh Google Calendar token", e);
             }
         }
 
@@ -204,14 +192,17 @@ public class GmailAuthService {
     private String extractEmail(GoogleAuthorizationCodeFlow flow, GoogleTokenResponse tokenResponse) {
         try {
             var token = flow.createAndStoreCredential(tokenResponse, null);
-            var service = new com.google.api.services.gmail.Gmail.Builder(
-                    new NetHttpTransport(), JSON_FACTORY, token)
-                    .setApplicationName("Plinth")
-                    .build();
-            var profile = service.users().getProfile("me").execute();
-            return profile.getEmailAddress();
-        } catch (Exception e) {
-            return "";
+            var request = new NetHttpTransport().createRequestFactory(token)
+                    .buildGetRequest(new com.google.api.client.http.GenericUrl(
+                            "https://www.googleapis.com/oauth2/v2/userinfo"));
+            var response = request.execute();
+            var json = JSON_FACTORY.fromInputStream(response.getContent(), Object.class);
+            if (json instanceof java.util.Map<?, ?> map && map.get("email") != null) {
+                return map.get("email").toString();
+            }
+        } catch (Exception ignored) {
+            // optional
         }
+        return "";
     }
 }
