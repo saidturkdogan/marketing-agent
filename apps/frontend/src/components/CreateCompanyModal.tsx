@@ -263,7 +263,7 @@ export function CreateCompanyModal({ onClose, onCreated }: Props) {
             <label className="form-label">Core Value Proposition</label>
             <textarea
               className="form-textarea"
-              placeholder="e.g. AI-native kişiselleştirilmiş beslenme ve sağlık takibi"
+              placeholder="e.g. AI-native personalized nutrition and health tracking"
               value={coreValueProp}
               onChange={(e) => setCoreValueProp(e.target.value)}
               rows={2}

@@ -180,6 +180,7 @@
 }
 
 /* Legacy custom classes preserved for backward compat */
+/* Sidebar navigation */
 .sidebar-nav-item {
   display: flex;
   align-items: center;
@@ -204,6 +205,18 @@
 .sidebar-nav-item.active {
   background: hsl(var(--sidebar-accent) / 0.5);
   color: hsl(var(--sidebar-primary));
+}
+
+/* Icon sidebar hover fix for #2E2F32 background */
+.icon-sidebar-btn {
+  @apply w-full flex flex-col items-center justify-center gap-1 h-14 rounded-lg transition-colors;
+}
+.icon-sidebar-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.icon-sidebar-btn.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 .auth-container {

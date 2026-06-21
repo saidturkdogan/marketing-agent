@@ -6,10 +6,10 @@ type Props = {
 };
 
 const DIMENSIONS: { key: keyof BrandVoiceScale; label: string; desc: string }[] = [
-  { key: "humor", label: "Mizah", desc: "Espri ve gayri resmi dil kullanımı" },
-  { key: "professionalism", label: "Profesyonellik", desc: "Kurumsal ve ciddi dil seviyesi" },
-  { key: "technical_terms", label: "Teknik Terim", desc: "Sektöre özel jargon kullanımı" },
-  { key: "provocative", label: "Provokatif / Kışkırtıcı", desc: "Cesur ve sınırları zorlayan dil" },
+  { key: "humor", label: "Humor", desc: "Use of humor and informal language" },
+  { key: "professionalism", label: "Professionalism", desc: "Corporate and formal tone level" },
+  { key: "technical_terms", label: "Technical Terms", desc: "Industry-specific jargon usage" },
+  { key: "provocative", label: "Provocative", desc: "Bold, boundary-pushing language" },
 ];
 
 export default function BrandVoiceSliders({ value, onChange }: Props) {
@@ -20,7 +20,7 @@ export default function BrandVoiceSliders({ value, onChange }: Props) {
   return (
     <div className="space-y-4">
       <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wide">
-        Marka Sesi Skalası (1-10)
+        Brand Voice Scale (1-10)
       </h3>
       {DIMENSIONS.map((dim) => {
         const current = value?.[dim.key] ?? 5;

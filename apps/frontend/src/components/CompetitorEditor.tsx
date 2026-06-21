@@ -36,7 +36,7 @@ export default function CompetitorEditor({ value, onChange }: Props) {
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wide">
-        Rakip Detayları
+        Competitor Details
       </h3>
 
       {value.map((comp, idx) => (
@@ -46,7 +46,7 @@ export default function CompetitorEditor({ value, onChange }: Props) {
               className="form-input flex-1 text-sm bg-slate-950 border-slate-700 rounded px-2 py-1 text-slate-200"
               value={comp.name}
               onChange={(e) => updateField(idx, "name", e.target.value)}
-              placeholder="Rakip adı"
+              placeholder="Competitor name"
             />
             <button
               onClick={() => remove(idx)}
@@ -57,21 +57,21 @@ export default function CompetitorEditor({ value, onChange }: Props) {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-slate-500 block mb-0.5">Zayıf Yönleri</label>
+              <label className="text-[10px] text-slate-500 block mb-0.5">Weaknesses</label>
               <input
                 className="form-input w-full text-xs bg-slate-950 border-slate-700 rounded px-2 py-1 text-slate-300"
                 value={comp.weakness}
                 onChange={(e) => updateField(idx, "weakness", e.target.value)}
-                placeholder="örn: yüksek fiyat"
+                placeholder="e.g. high pricing"
               />
             </div>
             <div>
-              <label className="text-[10px] text-slate-500 block mb-0.5">Bizim Avantajımız</label>
+              <label className="text-[10px] text-slate-500 block mb-0.5">Our Advantage</label>
               <input
                 className="form-input w-full text-xs bg-slate-950 border-slate-700 rounded px-2 py-1 text-slate-300"
                 value={comp.our_advantage}
                 onChange={(e) => updateField(idx, "our_advantage", e.target.value)}
-                placeholder="örn: daha hızlı onboarding"
+                placeholder="e.g. faster onboarding"
               />
             </div>
           </div>
@@ -84,7 +84,7 @@ export default function CompetitorEditor({ value, onChange }: Props) {
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder="Rakip adı"
+          placeholder="Competitor name"
         />
         <div className="grid grid-cols-2 gap-2">
           <input
@@ -92,21 +92,21 @@ export default function CompetitorEditor({ value, onChange }: Props) {
             value={newWeakness}
             onChange={(e) => setNewWeakness(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && add()}
-            placeholder="Zayıf yön"
+            placeholder="Weakness"
           />
           <input
             className="form-input w-full text-xs bg-slate-950 border-slate-700 rounded px-2 py-1 text-slate-300"
             value={newAdvantage}
             onChange={(e) => setNewAdvantage(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && add()}
-            placeholder="Bizim avantajımız"
+            placeholder="Our advantage"
           />
         </div>
         <button
           onClick={add}
           className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
         >
-          <Plus size={12} /> Rakip Ekle
+          <Plus size={12} /> Add Competitor
         </button>
       </div>
     </div>
