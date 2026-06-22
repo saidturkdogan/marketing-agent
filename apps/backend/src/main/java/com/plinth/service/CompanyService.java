@@ -43,6 +43,11 @@ public class CompanyService {
         return toProfile(findByCompanyIdAndUser(companyId, userId));
     }
 
+    public void requireOwnedCompany(String companyId) {
+        Long userId = authUtils.getCurrentUserId();
+        findByCompanyIdAndUser(companyId, userId);
+    }
+
     public CompanyProfile getProfileInternal(String companyId) {
         return companyRepository.findByCompanyId(companyId)
                 .map(this::toProfile)

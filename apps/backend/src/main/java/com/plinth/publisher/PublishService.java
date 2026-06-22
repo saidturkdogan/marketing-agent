@@ -25,11 +25,11 @@ public class PublishService {
         return instagramGraphPublisherService.publishImage(imageUrl, caption);
     }
 
-    public PublishResult publishTwitter(String content) {
-        throw new UnsupportedOperationException("Use publishTwitter(content, companyId) instead");
+    public PublishResult publishTwitter(String content, String companyId) {
+        return publishTwitter(content, companyId, null);
     }
 
-    public PublishResult publishTwitter(String content, String companyId) {
-        return twitterPublisherService.publishTweet(content, companyId);
+    public PublishResult publishTwitter(String content, String companyId, String imageUrl) {
+        return twitterPublisherService.publishTweet(content, companyId, imageUrl);
     }
 }

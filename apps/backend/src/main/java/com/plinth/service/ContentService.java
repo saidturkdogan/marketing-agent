@@ -44,6 +44,7 @@ public class ContentService {
     private final ObjectMapper objectMapper;
     private final AgentBudgetService agentBudgetService;
     private final GeminiImageService geminiImageService;
+    private final TwitterAnalyticsService twitterAnalyticsService;
     private final RestClient openaiClient;
     private final String openaiApiKey;
 
@@ -61,6 +62,7 @@ public class ContentService {
                           AgentSchedulePlanner schedulePlanner,
                           AgentBudgetService agentBudgetService,
                           GeminiImageService geminiImageService,
+                          TwitterAnalyticsService twitterAnalyticsService,
                           ObjectMapper objectMapper,
                           @Value("${app.openai.api-key:}") String openaiApiKey) {
         this.contentRepository = contentRepository;
@@ -77,6 +79,7 @@ public class ContentService {
         this.schedulePlanner = schedulePlanner;
         this.agentBudgetService = agentBudgetService;
         this.geminiImageService = geminiImageService;
+        this.twitterAnalyticsService = twitterAnalyticsService;
         this.objectMapper = objectMapper;
         this.openaiApiKey = openaiApiKey;
 
@@ -91,6 +94,7 @@ public class ContentService {
     // ── List ──────────────────────────────────────────────────────
 
     public List<Map<String, Object>> listContents(String companyId) {
+        companyService.requireOwnedCompany(companyId);
         return contentRepository.findByCompanyIdOrderByCreatedAtDesc(companyId)
                 .stream().map(this::toMap).toList();
     }
@@ -350,7 +354,7 @@ public class ContentService {
         }
 
         String text = buildPublishText(entity);
-        PublishResult result = publishService.publishTwitter(text, entity.getCompanyId());
+        PublishResult result = publishService.publishTwitter(text, entity.getCompanyId(), entity.getImageUrl());
 
         if ("published".equals(result.status())) {
             agentBudgetService.recordXApiCredit(entity.getCompanyId());
@@ -680,6 +684,93 @@ public class ContentService {
             }
         }
         return List.of();
+    }
+
+    // ── Last post metrics ────────────────────────────────────────
+
+    public Map<String, Object> getLastPostMetrics(String companyId) {
+        companyService.requireOwnedCompany(companyId);
+        Map<String, Object> result = new LinkedHashMap<>();
+
+        Optional<ContentEntity> latestOpt = contentRepository.findByCompanyIdOrderByCreatedAtDesc(companyId)
+                .stream()
+                .filter(c -> "published".equals(c.getStatus()))
+                .max(Comparator.comparing(
+                        (ContentEntity c) -> c.getPublishedAt() != null ? c.getPublishedAt() : c.getCreatedAt(),
+                        Comparator.nullsLast(Comparator.naturalOrder())
+                ));
+
+        if (latestOpt.isEmpty()) {
+            result.put("hasPost", false);
+            result.put("message", "No published posts yet");
+            return result;
+        }
+
+        ContentEntity post = latestOpt.get();
+        result.put("hasPost", true);
+        result.put("contentId", post.getContentId());
+        result.put("title", post.getTitle());
+        result.put("body", post.getBody());
+        result.put("type", post.getType());
+        result.put("publishedAt", post.getPublishedAt() != null ? post.getPublishedAt().toString() : null);
+        result.put("platformUrl", post.getPlatformUrl());
+        result.put("platformPostId", post.getPlatformPostId());
+
+        String tweetId = post.getPlatformPostId();
+        Map<String, Object> metricsResult = null;
+        if (tweetId != null && !tweetId.isBlank()) {
+            metricsResult = twitterAnalyticsService.fetchTweetMetrics(companyId, tweetId);
+        }
+
+        if (metricsResult != null && Boolean.TRUE.equals(metricsResult.get("connected"))) {
+            result.put("metricsAvailable", true);
+            result.put("twitterConnected", true);
+            result.put("metrics", Map.of(
+                    "impressions", metricsResult.get("impressions"),
+                    "likes", metricsResult.get("likes"),
+                    "retweets", metricsResult.get("retweets"),
+                    "replies", metricsResult.get("replies"),
+                    "engagement", metricsResult.get("engagement")
+            ));
+            return result;
+        }
+
+        Map<String, Object> recent = twitterAnalyticsService.fetchRecentMetrics(companyId);
+        boolean connected = Boolean.TRUE.equals(recent.get("connected"));
+        result.put("twitterConnected", connected);
+        result.put("metricsAvailable", false);
+
+        if (connected && tweetId != null && !tweetId.isBlank()) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> tweets = (List<Map<String, Object>>) recent.get("tweets");
+            if (tweets != null) {
+                for (Map<String, Object> tweet : tweets) {
+                    if (tweetId.equals(tweet.get("id"))) {
+                        Map<String, Object> metrics = new LinkedHashMap<>();
+                        metrics.put("impressions", tweet.get("impressions"));
+                        metrics.put("likes", tweet.get("likes"));
+                        metrics.put("retweets", tweet.get("retweets"));
+                        metrics.put("replies", tweet.get("replies"));
+                        metrics.put("engagement", tweet.get("engagement"));
+                        result.put("metricsAvailable", true);
+                        result.put("metrics", metrics);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!Boolean.TRUE.equals(result.get("metricsAvailable"))) {
+            if (metricsResult != null && metricsResult.get("message") != null) {
+                result.put("metricsMessage", metricsResult.get("message"));
+            } else if (!connected) {
+                result.put("metricsMessage", recent.getOrDefault("message", "Connect X to see live metrics"));
+            } else {
+                result.put("metricsMessage", "Live metrics unavailable for this post");
+            }
+        }
+
+        return result;
     }
 
     // ── Entity to Map ────────────────────────────────────────────

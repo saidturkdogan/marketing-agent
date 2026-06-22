@@ -1,6 +1,10 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
+import {
+  resolveDashboardTarget,
+  setStoredDashboardPath,
+} from "../lib/userSession";
 import {
   dashboardPath,
   isDashboardView,
@@ -22,14 +26,35 @@ import {
   syncScheduledPostsToCalendar,
   getGmailStatus,
   getTwitterStatus,
+  getLastPostMetrics,
+  getAgentStatus,
+  getAgentMarketBrief,
+  listApprovals,
+  approveContent,
+  rejectContent,
+  runAgent,
   type GoogleCalendarEvent,
+  type AgentStatus,
+  type ApprovalItem,
 } from "../api";
 import type {
   DashboardData,
   Company,
   CalendarItem,
   ContentItem,
+  LastPostMetrics,
+  StrategicPillar,
+  Opportunity,
 } from "../types";
+import {
+  IntegrationStatusBar,
+  DashboardHeaderSection,
+  NeedsAttentionSection,
+  AgentFleetMiniSection,
+  MarketSnapshotCard,
+  StrategyOpportunitiesSection,
+} from "../components/DashboardOverviewSections";
+import type { MarketSignals } from "../components/MarketSignalsView";
 import { ChatView } from "../components/ChatView";
 import { PlinthLogo } from "../components/PlinthLogo";
 import { CreateCompanyModal } from "../components/CreateCompanyModal";
@@ -47,9 +72,7 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip";
 import {
-  Sparkles,
   BarChart3,
-  Target,
   Calendar,
   UserPlus,
   Settings,
@@ -73,19 +96,21 @@ import {
   LayoutDashboard,
   ThumbsUp,
   Plus,
-  Building2,
   Moon,
   Sun,
   Monitor,
   Palette,
   RefreshCw,
   Home,
-  Phone,
-  HelpCircle,
   Bell,
   Inbox,
   Bot,
   Twitter,
+  Eye,
+  Heart,
+  MessageCircle,
+  Repeat2,
+  ExternalLink,
 } from "lucide-react";
 
 type View = DashboardView;
@@ -142,7 +167,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (companyId) {
-      sessionStorage.setItem("plinth-last-dashboard", buildDashboardUrl(companyId, view));
+      setStoredDashboardPath(buildDashboardUrl(companyId, view));
     }
   }, [companyId, view, buildDashboardUrl]);
 
@@ -207,6 +232,13 @@ export function DashboardPage() {
   const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const [allContents, setAllContents] = useState<ContentItem[]>([]);
+  const [lastPostMetrics, setLastPostMetrics] = useState<LastPostMetrics | null>(null);
+  const [lastPostMetricsLoading, setLastPostMetricsLoading] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
+  const [overviewApprovals, setOverviewApprovals] = useState<ApprovalItem[]>([]);
+  const [marketSignals, setMarketSignals] = useState<MarketSignals | null>(null);
+  const [marketSignalsLoading, setMarketSignalsLoading] = useState(false);
+  const [agentRunning, setAgentRunning] = useState(false);
 
   const NAV_KEYWORDS: { keys: string[]; view: View }[] = [
     { keys: ["dashboard", "overview", "home"], view: "overview" },
@@ -371,6 +403,88 @@ export function DashboardPage() {
     listContents(companyId).then(setAllContents).catch(() => {});
   }, [companyId, view]);
 
+  const publishedCount = useMemo(
+    () => allContents.filter((c) => c.status === "published").length,
+    [allContents],
+  );
+
+  const loadLastPostMetrics = useCallback(async () => {
+    if (!companyId) return;
+    setLastPostMetricsLoading(true);
+    try {
+      const data = await getLastPostMetrics(companyId);
+      setLastPostMetrics(data);
+    } catch {
+      setLastPostMetrics(null);
+    } finally {
+      setLastPostMetricsLoading(false);
+    }
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId || view !== "overview") return;
+    loadLastPostMetrics();
+  }, [companyId, view, publishedCount, loadLastPostMetrics]);
+
+  const loadOverviewExtras = useCallback(async () => {
+    if (!companyId) return;
+    setMarketSignalsLoading(true);
+    try {
+      const [agent, approvals, marketBrief] = await Promise.all([
+        getAgentStatus(companyId).catch(() => null),
+        listApprovals(companyId).catch(() => []),
+        getAgentMarketBrief(companyId).catch(() => null),
+      ]);
+      setAgentStatus(agent);
+      setOverviewApprovals(Array.isArray(approvals) ? approvals : []);
+      if (marketBrief?.signals) {
+        setMarketSignals(marketBrief.signals as MarketSignals);
+      } else {
+        setMarketSignals(null);
+      }
+    } finally {
+      setMarketSignalsLoading(false);
+    }
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId || view !== "overview") return;
+    loadOverviewExtras();
+  }, [companyId, view, loadOverviewExtras]);
+
+  const handleOverviewApprove = async (approvalId: string) => {
+    try {
+      await approveContent(approvalId);
+      await loadOverviewExtras();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleOverviewReject = async (approvalId: string) => {
+    try {
+      await rejectContent(approvalId);
+      await loadOverviewExtras();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleRunAllAgents = async () => {
+    if (!companyId) return;
+    setAgentRunning(true);
+    try {
+      await runAgent(companyId);
+      await loadOverviewExtras();
+      await loadLastPostMetrics();
+      listContents(companyId).then(setAllContents).catch(() => {});
+    } catch {
+      /* ignore */
+    } finally {
+      setAgentRunning(false);
+    }
+  };
+
   useEffect(() => {
     if (!companyId) return;
     getGmailStatus(companyId).then(s => { setGmailConnected(s.connected); }).catch(() => {});
@@ -412,20 +526,26 @@ export function DashboardPage() {
     if (!token && !isSignedIn) return;
     if (companyId) return;
 
-    const stored = sessionStorage.getItem("plinth-last-dashboard");
-    if (stored && /^\/dashboard\/[^/]+/.test(stored)) {
-      navigate(stored, { replace: true });
-      return;
-    }
-    const pendingView = resolveDashboardView(undefined, searchParams.get("tab"));
+    resolveDashboardTarget()
+      .then((path) => navigate(path, { replace: true }))
+      .catch(() => navigate("/onboarding", { replace: true }));
+  }, [token, isSignedIn, companyId, navigate]);
+
+  useEffect(() => {
+    if ((!token && !isSignedIn) || !companyId) return;
+
     listCompanies()
-      .then((cs) => {
-        if (cs.length > 0)
-          navigate(buildDashboardUrl(cs[0].companyId, pendingView), { replace: true });
-        else navigate("/onboarding", { replace: true });
+      .then((companies) => {
+        const owned = companies.some((c) => c.companyId === companyId);
+        if (owned) return;
+        if (companies.length === 0) {
+          navigate("/onboarding", { replace: true });
+          return;
+        }
+        navigate(buildDashboardUrl(companies[0].companyId, view), { replace: true });
       })
       .catch(() => navigate("/onboarding", { replace: true }));
-  }, [token, isSignedIn, companyId, navigate, searchParams, buildDashboardUrl]);
+  }, [token, isSignedIn, companyId, navigate, buildDashboardUrl, view]);
 
   useEffect(() => {
     if ((!token && !isSignedIn) || !companyId) return;
@@ -631,36 +751,17 @@ export function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-1 pr-4 flex-shrink-0">
-          <button className="h-9 px-3 rounded-md text-white text-sm font-medium hover:bg-[#3a3b3e] transition-colors flex items-center gap-2">
-            <ArrowRight className="h-4 w-4 rotate-180" />
-            Upgrade
-          </button>
-          <Separator
-            orientation="vertical"
-            className="h-6 bg-gray-600 mx-2"
-          />
-          <button className="h-9 w-9 rounded-md flex items-center justify-center text-white hover:bg-[#3a3b3e] transition-colors">
-            <Phone className="h-4 w-4" />
-          </button>
-          <button className="h-9 w-9 rounded-md flex items-center justify-center text-white hover:bg-[#3a3b3e] transition-colors">
-            <Building2 className="h-4 w-4" />
-          </button>
-          <button className="h-9 w-9 rounded-md flex items-center justify-center text-white hover:bg-[#3a3b3e] transition-colors">
-            <HelpCircle className="h-4 w-4" />
-          </button>
-          <button className="h-9 w-9 rounded-md flex items-center justify-center text-white hover:bg-[#3a3b3e] transition-colors">
-            <Settings className="h-4 w-4" />
-          </button>
+          {companyId && (
+            <IntegrationStatusBar
+              twitterConnected={twitterConnected}
+              twitterScreenName={twitterScreenName}
+              gmailConnected={gmailConnected}
+              calendarConnected={googleCalendarConnected}
+              onNavigateSettings={() => handleViewChange("settings")}
+            />
+          )}
           <button className="h-9 w-9 rounded-md flex items-center justify-center text-white hover:bg-[#3a3b3e] transition-colors">
             <Bell className="h-4 w-4" />
-          </button>
-          <Separator
-            orientation="vertical"
-            className="h-6 bg-gray-600 mx-2"
-          />
-          <button className="h-9 px-3 rounded-md text-white text-sm font-medium hover:bg-[#3a3b3e] transition-colors flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
-            Assistant
           </button>
           <Separator
             orientation="vertical"
@@ -867,6 +968,7 @@ export function DashboardPage() {
               companyId={companyId}
               company={company}
               dashboardData={dashboardData}
+              marketingScore={score}
               strategy={strategy}
               calendar={{
                 days: calendarDays,
@@ -876,6 +978,7 @@ export function DashboardPage() {
               weekDays={weekDays}
               assets={{ posts, newsletter, schedule }}
               pillars={pillars}
+              opportunities={dashboardData?.opportunities ?? []}
               strategyId={dashboardData?.strategyId}
               onNewPipeline={() => navigate(`/pipeline/${companyId}`)}
               onSelectContent={(item) => {
@@ -899,6 +1002,20 @@ export function DashboardPage() {
               calendarSyncMessage={calendarSyncMessage}
               scheduledPosts={scheduledPosts}
               onSelectScheduledPost={() => handleViewChange("content")}
+              lastPostMetrics={lastPostMetrics}
+              lastPostMetricsLoading={lastPostMetricsLoading}
+              onRefreshLastPostMetrics={loadLastPostMetrics}
+              agentStatus={agentStatus}
+              overviewApprovals={overviewApprovals}
+              marketSignals={marketSignals}
+              marketSignalsLoading={marketSignalsLoading}
+              onRefreshMarketSignals={loadOverviewExtras}
+              onNavigateAgent={() => handleViewChange("agent")}
+              onNavigateApproval={() => handleViewChange("approval")}
+              onRunAllAgents={handleRunAllAgents}
+              agentRunning={agentRunning}
+              onApprove={handleOverviewApprove}
+              onReject={handleOverviewReject}
             />
               )}
             </div>
@@ -1008,6 +1125,128 @@ export function DashboardPage() {
   );
 }
 
+function LastPostMetricsCard({
+  metrics,
+  loading,
+  onRefresh,
+}: {
+  metrics: LastPostMetrics | null;
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const formatDate = (iso?: string | null) => {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return iso;
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm h-full">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <Twitter className="h-5 w-5 text-gray-800" />
+          <h2 className="text-lg font-semibold text-gray-900">Latest post</h2>
+          {metrics?.metricsAvailable && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+              Live
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </button>
+      </div>
+
+      {loading && !metrics ? (
+        <div className="animate-pulse space-y-3">
+          <div className="h-4 w-full max-w-lg rounded bg-gray-100" />
+          <div className="h-3 w-32 rounded bg-gray-100" />
+          <div className="grid grid-cols-5 gap-2 mt-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-14 rounded-md bg-gray-100" />
+            ))}
+          </div>
+        </div>
+      ) : !metrics?.hasPost ? (
+        <p className="text-sm text-gray-500 rounded-lg bg-gray-50 px-4 py-5 text-center">
+          {metrics?.message || "No published posts yet. Publish from Content Studio to see metrics here."}
+        </p>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-gray-900 line-clamp-3 whitespace-pre-wrap">
+                {metrics.body || metrics.title || "Untitled post"}
+              </p>
+              {metrics.publishedAt && (
+                <p className="text-xs text-gray-400 mt-1.5">Published {formatDate(metrics.publishedAt)}</p>
+              )}
+            </div>
+            {metrics.platformUrl && (
+              <a
+                href={metrics.platformUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-sky-600 hover:text-sky-800"
+              >
+                View on X
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
+          </div>
+
+          {metrics.metricsAvailable && metrics.metrics ? (
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <PostMetric icon={<Eye className="h-3.5 w-3.5" />} label="Impressions" value={metrics.metrics.impressions} />
+              <PostMetric icon={<Heart className="h-3.5 w-3.5" />} label="Likes" value={metrics.metrics.likes} />
+              <PostMetric icon={<Repeat2 className="h-3.5 w-3.5" />} label="Retweets" value={metrics.metrics.retweets} />
+              <PostMetric icon={<MessageCircle className="h-3.5 w-3.5" />} label="Replies" value={metrics.metrics.replies} />
+              <PostMetric icon={<BarChart3 className="h-3.5 w-3.5" />} label="Engagement" value={metrics.metrics.engagement} />
+            </div>
+          ) : (
+            <p className="text-xs text-amber-700 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
+              {metrics.metricsMessage || "Connect X in Settings to load live metrics for this post."}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PostMetric({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2.5 text-center">
+      <div className="flex items-center justify-center gap-1 text-gray-400 mb-0.5">{icon}</div>
+      <p className="text-base font-semibold text-gray-900 tabular-nums">{value.toLocaleString()}</p>
+      <p className="text-[10px] text-gray-500">{label}</p>
+    </div>
+  );
+}
+
 function DashboardOverviewSkeleton() {
   return (
     <div className="max-w-[1400px] mx-auto px-8 py-6 space-y-6 animate-pulse">
@@ -1015,15 +1254,18 @@ function DashboardOverviewSkeleton() {
         <div className="h-4 w-32 rounded bg-gray-100" />
         <div className="h-9 w-72 rounded bg-gray-100" />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-64 rounded-lg bg-gray-100" />
-        <div className="h-64 rounded-lg bg-gray-100" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-28 rounded-xl bg-gray-100" />
+        ))}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="h-28 rounded-lg bg-gray-100" />
-        <div className="h-28 rounded-lg bg-gray-100" />
-        <div className="h-28 rounded-lg bg-gray-100" />
+      <div className="h-32 rounded-xl bg-gray-100" />
+      <div className="h-40 rounded-xl bg-gray-100" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="h-48 rounded-xl bg-gray-100" />
+        <div className="h-48 rounded-xl bg-gray-100" />
       </div>
+      <div className="h-64 rounded-xl bg-gray-100" />
     </div>
   );
 }
@@ -1032,11 +1274,13 @@ function OverviewView({
   companyId,
   company,
   dashboardData,
+  marketingScore,
   strategy,
   calendar,
   weekDays,
   assets,
   pillars,
+  opportunities,
   strategyId,
   onNewPipeline,
   onSelectContent,
@@ -1057,10 +1301,25 @@ function OverviewView({
   calendarSyncMessage,
   scheduledPosts,
   onSelectScheduledPost,
+  lastPostMetrics,
+  lastPostMetricsLoading,
+  onRefreshLastPostMetrics,
+  agentStatus,
+  overviewApprovals,
+  marketSignals,
+  marketSignalsLoading,
+  onRefreshMarketSignals,
+  onNavigateAgent,
+  onNavigateApproval,
+  onRunAllAgents,
+  agentRunning,
+  onApprove,
+  onReject,
 }: {
   companyId?: string;
   company: Company | null;
   dashboardData: DashboardData | null;
+  marketingScore: number;
   strategy: Record<string, unknown>;
   calendar: {
     days: Record<string, unknown>[];
@@ -1074,6 +1333,7 @@ function OverviewView({
     schedule: Record<string, unknown>[];
   };
   pillars: Record<string, unknown>[];
+  opportunities: Opportunity[];
   strategyId?: string;
   onNewPipeline: () => void;
   onSelectContent?: (item: Record<string, unknown>) => void;
@@ -1094,29 +1354,63 @@ function OverviewView({
   calendarSyncMessage: string | null;
   scheduledPosts: Array<{ id: string; title: string; start: string; type: string; inGoogleCalendar?: boolean; calendarEventId?: string | null }>;
   onSelectScheduledPost?: () => void;
+  lastPostMetrics: LastPostMetrics | null;
+  lastPostMetricsLoading: boolean;
+  onRefreshLastPostMetrics: () => void;
+  agentStatus: AgentStatus | null;
+  overviewApprovals: ApprovalItem[];
+  marketSignals: MarketSignals | null;
+  marketSignalsLoading: boolean;
+  onRefreshMarketSignals: () => void;
+  onNavigateAgent: () => void;
+  onNavigateApproval: () => void;
+  onRunAllAgents: () => void;
+  agentRunning: boolean;
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
 }) {
-  const info = {
-    name: company?.name || "",
-    industry:
-      company?.industry || strategy?.executive_summary ? "Analyzed" : "",
-    website: company?.websiteUrl || "",
-    goal: dashboardData?.strategyId ? "Active" : "",
-  };
+  const strategicPillars: StrategicPillar[] = pillars.map((p) => ({
+    name: typeof p.name === "string" ? p.name : typeof p.title === "string" ? p.title : "Pillar",
+    description: typeof p.description === "string" ? p.description : "",
+    initiatives: Array.isArray(p.initiatives) ? (p.initiatives as string[]) : [],
+  }));
 
   return (
     <div className="max-w-[1400px] mx-auto px-8 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-gray-500 mb-1">{date}</p>
-          <h1 className="text-3xl font-bold text-gray-900">
-            {greeting}, {userName?.split(" ")[0] || "User"}
-          </h1>
-        </div>
-        <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-          <Settings className="h-4 w-4" />
-          Customize
-        </button>
+      <DashboardHeaderSection
+        date={date}
+        greeting={greeting}
+        userName={userName}
+        marketingScore={marketingScore}
+        dashboardData={dashboardData}
+      />
+
+      <NeedsAttentionSection
+        approvals={overviewApprovals}
+        onApprove={onApprove}
+        onReject={onReject}
+        onViewAll={onNavigateApproval}
+      />
+
+      <AgentFleetMiniSection
+        status={agentStatus}
+        approvals={overviewApprovals}
+        onNavigateAgent={onNavigateAgent}
+        onRunAgents={onRunAllAgents}
+        running={agentRunning}
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+        <LastPostMetricsCard
+          metrics={lastPostMetrics}
+          loading={lastPostMetricsLoading}
+          onRefresh={onRefreshLastPostMetrics}
+        />
+        <MarketSnapshotCard
+          signals={marketSignals}
+          loading={marketSignalsLoading}
+          onRefresh={onRefreshMarketSignals}
+        />
       </div>
 
       {/* Calendar — meetings + scheduled posts */}
@@ -1271,6 +1565,11 @@ function OverviewView({
           )}
         </div>
       </div>
+
+      <StrategyOpportunitiesSection
+        pillars={strategicPillars}
+        opportunities={opportunities}
+      />
     </div>
   );
 }

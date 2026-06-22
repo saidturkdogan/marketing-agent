@@ -1,11 +1,31 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
-import { createCompany, analyzeWebsite, getGmailAuthUrl } from "../api";
+import { createCompany, analyzeWebsite, getGmailAuthUrl, runOnboardingBootstrap } from "../api";
 import type { CompanyPayload } from "../types";
-import { PlinthLogo } from "../components/PlinthLogo";
 import {
-  Sparkles, ArrowRight, Check, Globe, Search, Users, Mail, TrendingUp, Heart, User, Building2, Briefcase, Tag, Inbox, ChevronRight, Loader2,
+  OnboardingShell,
+  OnboardingWaitOverlay,
+  OnboardingLaunchResults,
+  WEBSITE_ANALYZE_PHASES,
+  WORKSPACE_SETUP_PHASES,
+  ONBOARDING_LAUNCH_PHASES,
+  GMAIL_SYNC_PHASES,
+} from "../components/OnboardingFlowUI";
+import {
+  Sparkles,
+  ArrowRight,
+  ArrowLeft,
+  Check,
+  Globe,
+  Users,
+  Mail,
+  User,
+  Building2,
+  Briefcase,
+  Tag,
+  ChevronRight,
+  Loader2,
 } from "lucide-react";
 
 const ROLES = [
@@ -28,6 +48,24 @@ const EMAIL_PROVIDERS = [
   { id: "gmail", label: "Gmail", icon: Mail, desc: "Google Workspace / Gmail" },
 ];
 
+type WaitMode = "analyze" | "setup" | "bootstrap" | "gmail-callback" | null;
+
+type BootstrapTweet = {
+  contentId: string;
+  title?: string;
+  body?: string;
+  status?: string;
+  scheduledAt?: string;
+};
+
+function railStep(step: number, waitMode: WaitMode): number {
+  if (waitMode === "analyze") return 1;
+  if (waitMode === "setup") return 2;
+  if (waitMode === "gmail-callback") return 3;
+  if (waitMode === "bootstrap") return 4;
+  return step;
+}
+
 export function OnboardingPage({ clerkEnabled }: { clerkEnabled?: boolean }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -41,13 +79,17 @@ export function OnboardingPage({ clerkEnabled }: { clerkEnabled?: boolean }) {
   const [companySize, setCompanySize] = useState("");
   const [detectedName, setDetectedName] = useState("");
   const [detectedIndustry, setDetectedIndustry] = useState("");
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [companyId, setCompanyId] = useState<string | null>(searchParams.get("company_id"));
+  const [waitMode, setWaitMode] = useState<WaitMode>(null);
+  const [waitFinishing, setWaitFinishing] = useState(false);
   const [error, setError] = useState("");
+  const [bootstrapTweets, setBootstrapTweets] = useState<BootstrapTweet[]>([]);
+  const [marketingScore, setMarketingScore] = useState<number | undefined>();
+  const launchStartedRef = useRef(false);
 
   const isOAuthCallback = searchParams.get("email_connected") === "true";
   const oauthCompanyId = searchParams.get("company_id");
+  const resumeLaunch = searchParams.get("resume_launch") === "1";
 
   useEffect(() => {
     if (!token && !isSignedIn) {
@@ -56,17 +98,65 @@ export function OnboardingPage({ clerkEnabled }: { clerkEnabled?: boolean }) {
   }, [token, isSignedIn, navigate]);
 
   useEffect(() => {
-    if (isOAuthCallback && oauthCompanyId) {
+    if (resumeLaunch && oauthCompanyId) {
+      setCompanyId(oauthCompanyId);
+      setStep(4);
+    }
+  }, [resumeLaunch, oauthCompanyId]);
+
+  useEffect(() => {
+    if (isOAuthCallback && oauthCompanyId && !resumeLaunch) {
+      setCompanyId(oauthCompanyId);
+      setWaitMode("gmail-callback");
       const timer = setTimeout(() => {
-        navigate(`/pipeline/${oauthCompanyId}`, { replace: true });
-      }, 2000);
+        setWaitMode(null);
+        setStep(4);
+      }, 2200);
       return () => clearTimeout(timer);
     }
-  }, [isOAuthCallback, oauthCompanyId, navigate]);
+  }, [isOAuthCallback, oauthCompanyId, resumeLaunch]);
+
+  const runBootstrap = useCallback(async (targetCompanyId: string) => {
+    if (launchStartedRef.current) return;
+    launchStartedRef.current = true;
+    setWaitMode("bootstrap");
+    setWaitFinishing(false);
+    setError("");
+    try {
+      const result = await runOnboardingBootstrap(targetCompanyId);
+      setBootstrapTweets(result.tweets ?? []);
+      setMarketingScore(result.marketingScore);
+      setWaitFinishing(true);
+      await new Promise((r) => setTimeout(r, 800));
+      setWaitMode(null);
+      setWaitFinishing(false);
+    } catch (err) {
+      launchStartedRef.current = false;
+      setWaitMode(null);
+      setWaitFinishing(false);
+      const name = err instanceof Error ? err.name : "";
+      if (name === "TimeoutError" || name === "AbortError") {
+        setError("Generation took too long. Try again — no X or Gmail connection is required.");
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to generate your marketing content");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (step === 4 && companyId && bootstrapTweets.length === 0 && waitMode !== "bootstrap" && !launchStartedRef.current) {
+      runBootstrap(companyId);
+    }
+  }, [step, companyId, bootstrapTweets.length, waitMode, runBootstrap]);
+
+  function extractCompanyName(url: string): string {
+    const domain = url.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].split(".")[0];
+    return domain.charAt(0).toUpperCase() + domain.slice(1);
+  }
 
   async function handleWebsiteContinue() {
     if (!websiteUrl.trim()) return;
-    setAnalyzing(true);
+    setWaitMode("analyze");
     setError("");
     try {
       const result = await analyzeWebsite(websiteUrl.trim());
@@ -78,21 +168,22 @@ export function OnboardingPage({ clerkEnabled }: { clerkEnabled?: boolean }) {
         setDetectedName(extractCompanyName(websiteUrl));
         setDetectedIndustry("");
       }
+      setWaitFinishing(true);
+      await new Promise((r) => setTimeout(r, 500));
+      setWaitMode(null);
+      setWaitFinishing(false);
+      setStep(2);
     } catch {
       setDetectedName(extractCompanyName(websiteUrl));
       setDetectedIndustry("");
+      setWaitMode(null);
+      setStep(2);
     }
-    setAnalyzing(false);
-    setStep(2);
-  }
-
-  function extractCompanyName(url: string): string {
-    const domain = url.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].split(".")[0];
-    return domain.charAt(0).toUpperCase() + domain.slice(1);
   }
 
   async function handleCreateCompany() {
-    setLoading(true);
+    setWaitMode("setup");
+    setWaitFinishing(false);
     setError("");
     try {
       const payload: CompanyPayload = {
@@ -106,16 +197,25 @@ export function OnboardingPage({ clerkEnabled }: { clerkEnabled?: boolean }) {
       };
       const company = await createCompany(payload);
       setCompanyId(company.companyId);
+      setWaitFinishing(true);
+      await new Promise((r) => setTimeout(r, 500));
+      setWaitMode(null);
+      setWaitFinishing(false);
       setStep(3);
     } catch (err) {
+      setWaitMode(null);
+      setWaitFinishing(false);
       setError(err instanceof Error ? err.message : "Failed to create company");
-      setLoading(false);
     }
   }
 
-  function handleSkipEmail() {
+  function goToLaunch() {
+    setStep(4);
+  }
+
+  function openDashboard() {
     if (companyId) {
-      navigate(`/pipeline/${companyId}`, { replace: true });
+      navigate(`/dashboard/${companyId}`, { replace: true });
     }
   }
 
@@ -133,48 +233,47 @@ export function OnboardingPage({ clerkEnabled }: { clerkEnabled?: boolean }) {
 
   if (!token && !isSignedIn) return null;
 
+  if (isOAuthCallback && !resumeLaunch && waitMode === "gmail-callback") {
+    return (
+      <>
+        <div className="flex h-screen w-screen items-center justify-center bg-slate-50" />
+        <OnboardingWaitOverlay
+          open
+          title="Gmail connected"
+          subtitle="Returning to onboarding"
+          phases={GMAIL_SYNC_PHASES}
+          finishing
+          successTitle="Gmail connected!"
+          successSubtitle="Generating your first marketing content..."
+        />
+      </>
+    );
+  }
+
   function renderStep() {
     switch (step) {
       case 0:
         return (
           <div>
-            <h2 className="text-xl font-bold text-slate-800 mb-1">
-              What's your role?
-            </h2>
-            <p className="text-xs text-slate-500 mb-6">
-              So we can tailor the experience to you.
-            </p>
-            <div className="flex flex-col gap-2 mb-6">
-              {ROLES.map((r) => {
-                const sel = role === r.id;
-                return (
-                  <button
-                    key={r.id}
-                    onClick={() => { setRole(r.id); setStep(1); }}
-                    className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${
-                      sel
-                        ? "border-blue-500 bg-blue-50/50 shadow-sm"
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50 bg-white"
-                    }`}
-                  >
-                    <div className={`flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0 ${
-                      sel ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400"
-                    }`}>
-                      <User className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-semibold ${sel ? "text-blue-900" : "text-slate-700"}`}>
-                        {r.label}
-                      </p>
-                    </div>
-                    <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 flex-shrink-0 ${
-                      sel ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 bg-white"
-                    }`}>
-                      {sel && <Check className="h-3 w-3" />}
-                    </div>
-                  </button>
-                );
-              })}
+            <h2 className="text-xl font-bold text-slate-800 mb-1">What&apos;s your role?</h2>
+            <p className="text-xs text-slate-500 mb-6">So we can tailor the experience to you.</p>
+            <div className="flex flex-col gap-2">
+              {ROLES.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => {
+                    setRole(r.id);
+                    setStep(1);
+                  }}
+                  className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 bg-white text-left transition-all"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
+                    <User className="h-4 w-4" />
+                  </div>
+                  <p className="text-sm font-semibold flex-1 text-slate-700">{r.label}</p>
+                  <ChevronRight className="h-4 w-4 text-slate-300" />
+                </button>
+              ))}
             </div>
           </div>
         );
@@ -182,35 +281,29 @@ export function OnboardingPage({ clerkEnabled }: { clerkEnabled?: boolean }) {
       case 1:
         return (
           <div>
-            <h2 className="text-xl font-bold text-slate-800 mb-1">
-              What's your website URL?
-            </h2>
-            <p className="text-xs text-slate-500 mb-6">
-              We'll scan it to understand your business.
-            </p>
+            <button type="button" onClick={() => setStep(0)} className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 mb-4">
+              <ArrowLeft className="h-3.5 w-3.5" /> Back
+            </button>
+            <h2 className="text-xl font-bold text-slate-800 mb-1">What&apos;s your website URL?</h2>
+            <p className="text-xs text-slate-500 mb-6">We&apos;ll scan it to understand your business.</p>
             <div className="relative">
-              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               <input
                 type="url"
                 className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-sm focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-100 transition-all placeholder-slate-400"
-                style={{ paddingLeft: "2.5rem" }}
                 placeholder="https://example.com"
                 value={websiteUrl}
                 onChange={(e) => setWebsiteUrl(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !analyzing && handleWebsiteContinue()}
+                onKeyDown={(e) => e.key === "Enter" && websiteUrl.trim() && waitMode !== "analyze" && handleWebsiteContinue()}
                 autoFocus
               />
             </div>
             <button
               onClick={handleWebsiteContinue}
-              disabled={!websiteUrl.trim() || analyzing}
-              className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 mt-6 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md"
+              disabled={!websiteUrl.trim() || waitMode === "analyze"}
+              className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 mt-6 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40 transition-all shadow-md"
             >
-              {analyzing ? (
-                <><Loader2 className="h-4 w-4 animate-spin text-white" /> Analyzing...</>
-              ) : (
-                <>Continue <ArrowRight className="h-4 w-4" /></>
-              )}
+              Continue <ArrowRight className="h-4 w-4" />
             </button>
           </div>
         );
@@ -218,56 +311,21 @@ export function OnboardingPage({ clerkEnabled }: { clerkEnabled?: boolean }) {
       case 2:
         return (
           <div>
-            <h2 className="text-xl font-bold text-slate-800 mb-1">
-              Company Details
-            </h2>
-            <p className="text-xs text-slate-500 mb-6">
-              Review your information and add your company size.
-            </p>
+            <button type="button" onClick={() => setStep(1)} className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 mb-4">
+              <ArrowLeft className="h-3.5 w-3.5" /> Back
+            </button>
+            <h2 className="text-xl font-bold text-slate-800 mb-1">Company details</h2>
+            <p className="text-xs text-slate-500 mb-6">Review your information and add your company size.</p>
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 mb-6">
-              <div className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-200">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                  <Building2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400">Your Name</p>
-                  <p className="text-sm font-semibold text-slate-800">{authName || "You"}</p>
-                </div>
-              </div>
               <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <Tag className="h-4 w-4 text-slate-400 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs text-slate-400">Role</p>
-                    <p className="text-sm text-slate-700">{ROLES.find((r) => r.id === role)?.label || role}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Building2 className="h-4 w-4 text-slate-400 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs text-slate-400">Company Name</p>
-                    <p className="text-sm text-slate-700">{detectedName}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Globe className="h-4 w-4 text-slate-400 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs text-slate-400">Website URL</p>
-                    <p className="text-sm text-slate-700">{websiteUrl}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Briefcase className="h-4 w-4 text-slate-400 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs text-slate-400">Industry</p>
-                    <p className="text-sm text-slate-700">{detectedIndustry || "Auto-detected during analysis"}</p>
-                  </div>
-                </div>
+                <DetailRow icon={Tag} label="Role" value={ROLES.find((r) => r.id === role)?.label || role} />
+                <DetailRow icon={Building2} label="Company" value={detectedName} />
+                <DetailRow icon={Globe} label="Website" value={websiteUrl} />
+                <DetailRow icon={Briefcase} label="Industry" value={detectedIndustry || "Detected during analysis"} />
               </div>
             </div>
-
-            <p className="text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wider">Company Size</p>
-            <div className="flex flex-col gap-2 mb-6">
+            <p className="text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wider">Company size</p>
+            <div className="flex flex-col gap-2 mb-6 max-h-40 overflow-y-auto">
               {COMPANY_SIZES.map((s) => {
                 const sel = companySize === s.id;
                 return (
@@ -275,190 +333,152 @@ export function OnboardingPage({ clerkEnabled }: { clerkEnabled?: boolean }) {
                     key={s.id}
                     onClick={() => setCompanySize(s.id)}
                     className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
-                      sel
-                        ? "border-blue-500 bg-blue-50/50 shadow-sm"
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50 bg-white"
+                      sel ? "border-blue-500 bg-blue-50/50" : "border-slate-200 hover:bg-slate-50 bg-white"
                     }`}
                   >
-                    <div className={`flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0 ${
-                      sel ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400"
-                    }`}>
-                      <Users className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-semibold ${sel ? "text-blue-900" : "text-slate-700"}`}>
-                        {s.label}
-                      </p>
-                    </div>
-                    <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 flex-shrink-0 ${
-                      sel ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 bg-white"
-                    }`}>
-                      {sel && <Check className="h-3 w-3" />}
-                    </div>
+                    <Users className={`h-4 w-4 ${sel ? "text-blue-600" : "text-slate-400"}`} />
+                    <p className={`text-sm font-semibold flex-1 ${sel ? "text-blue-900" : "text-slate-700"}`}>{s.label}</p>
+                    {sel && <Check className="h-4 w-4 text-blue-600" />}
                   </button>
                 );
               })}
             </div>
-
             <button
               onClick={handleCreateCompany}
-              disabled={!companySize || loading}
-              className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md"
+              disabled={!companySize || waitMode === "setup"}
+              className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40 transition-all shadow-md"
             >
-              {loading ? (
-                <><Loader2 className="h-4 w-4 animate-spin text-white" /> Creating...</>
-              ) : (
-                <>Continue <ArrowRight className="h-4 w-4" /></>
-              )}
+              Continue <ArrowRight className="h-4 w-4" />
             </button>
           </div>
         );
 
       case 3:
         return (
-          <div className="text-center py-8">
-            <div className="flex justify-center mb-6">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-inner">
-                <Sparkles className="h-8 w-8 text-blue-500 animate-pulse" />
+          <div>
+            <div className="text-center mb-6">
+              <div className="flex justify-center mb-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                  <Mail className="h-7 w-7" />
+                </div>
               </div>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">Connect Gmail (optional)</h2>
+              <p className="text-xs text-slate-500">Power the mail agent — or skip straight to content generation.</p>
             </div>
-            <h1 className="text-2xl font-bold text-slate-800 mb-2">
-              Glad to have you here!
-            </h1>
-            <p className="text-xs text-slate-500 mb-8">
-              We're setting up your workspace and scanning your website...
-            </p>
-            <div className="flex justify-center">
-              <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleGmailConnect}
+                className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 shadow-md"
+              >
+                <Mail className="h-4 w-4" /> Connect Gmail
+              </button>
+              <button
+                onClick={goToLaunch}
+                className="w-full h-11 flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-semibold"
+              >
+                <Sparkles className="h-4 w-4" /> Generate my marketing
+              </button>
             </div>
           </div>
         );
 
       case 4:
+        if (bootstrapTweets.length > 0) {
+          return (
+            <OnboardingLaunchResults
+              tweets={bootstrapTweets}
+              marketingScore={marketingScore}
+              onContinue={openDashboard}
+            />
+          );
+        }
+        if (error && waitMode !== "bootstrap") {
+          return (
+            <div className="text-center py-4 space-y-4">
+              <p className="text-sm text-red-600">{error}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  launchStartedRef.current = false;
+                  setError("");
+                  if (companyId) runBootstrap(companyId);
+                }}
+                className="w-full h-11 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                Try again
+              </button>
+            </div>
+          );
+        }
         return (
-          <div>
-            <div className="text-center mb-8">
-              <div className="flex justify-center mb-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-blue-600 shadow-inner">
-                  <Mail className="h-8 w-8 text-blue-500" />
-                </div>
-              </div>
-              <h2 className="text-2xl font-bold text-slate-800 mb-2">
-                Connect your Gmail
-              </h2>
-              <p className="text-xs text-slate-500">
-                Sync your conversations and contacts to enrich your marketing.
-              </p>
+          <div className="text-center py-6">
+            <div className="flex justify-center mb-4">
+              <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
             </div>
-
-            <div className="flex flex-col gap-3 mb-8">
-              {EMAIL_PROVIDERS.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={handleGmailConnect}
-                  className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 transition-all text-left shadow-sm"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
-                    <p.icon className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-800">{p.label}</p>
-                    <p className="text-xs text-slate-500">{p.desc}</p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-slate-400" />
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={handleGmailConnect}
-                className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white hover:bg-blue-700 transition-all shadow-md"
-              >
-                <Mail className="h-4 w-4" /> Connect Gmail
-              </button>
-              <button
-                onClick={handleSkipEmail}
-                className="w-full h-11 flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 px-6 text-sm font-semibold transition-all"
-              >
-                Skip for now
-              </button>
-            </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Building your marketing</h2>
+            <p className="text-xs text-slate-500">
+              Research, strategy, and X posts — typically 1–3 minutes. No integrations required.
+            </p>
           </div>
         );
-    }
-  }
 
-  useEffect(() => {
-    if (step === 3 && companyId) {
-      const timer = setTimeout(() => {
-        setStep(4);
-      }, 2000);
-      return () => clearTimeout(timer);
+      default:
+        return null;
     }
-  }, [step, companyId]);
-
-  if (isOAuthCallback) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-50 overflow-hidden font-sans">
-        <div className="w-full max-w-md p-8 bg-white rounded-2xl border border-slate-200 shadow-xl text-center">
-          <div className="flex justify-center mb-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 shadow-inner">
-              <Check className="h-8 w-8 text-emerald-600" />
-            </div>
-          </div>
-          <h2 className="text-xl font-bold text-slate-800 mb-2">
-            Gmail connected!
-          </h2>
-          <p className="text-xs text-slate-500">
-            We're pulling in your emails. Taking you to your workspace...
-          </p>
-          <div className="flex justify-center mt-8">
-            <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
-          </div>
-        </div>
-      </div>
-    );
   }
 
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-slate-50 overflow-hidden font-sans">
-      <div className="w-full max-w-md p-8 bg-white rounded-2xl border border-slate-200 shadow-xl">
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-2.5">
-            <PlinthLogo size={32} />
-            <span className="text-2xl font-extrabold text-slate-800 tracking-tight">Plinth</span>
-          </div>
-        </div>
+    <>
+      <OnboardingShell
+        currentStep={railStep(step, waitMode)}
+        error={error}
+        footer={
+          step < 4 ? (
+            <p className="text-[10px] text-slate-400 text-center mt-6">
+              Onboarding ends with real X posts drafted for your brand.
+            </p>
+          ) : undefined
+        }
+      >
+        {renderStep()}
+      </OnboardingShell>
 
-        <div className="animate-slideUpFade" key={step}>
-          {renderStep()}
-        </div>
+      <OnboardingWaitOverlay
+        open={waitMode === "analyze"}
+        title="Analyzing your website"
+        phases={WEBSITE_ANALYZE_PHASES}
+        finishing={waitFinishing && waitMode === "analyze"}
+        successTitle="Profile ready"
+      />
 
-        {step > 0 && step < 3 && !loading && (
-          <div className="flex items-center justify-center gap-2 mt-8">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className={`h-1.5 rounded-full transition-all duration-500 ${
-                  i === step - 1 ? "w-8 bg-blue-600" : "w-1.5 bg-slate-200"
-                }`}
-              />
-            ))}
-          </div>
-        )}
+      <OnboardingWaitOverlay
+        open={waitMode === "setup"}
+        title="Creating workspace"
+        phases={WORKSPACE_SETUP_PHASES}
+        finishing={waitFinishing}
+        successTitle="Workspace ready"
+      />
 
-        {error && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 text-center animate-fadeIn font-semibold">
-            {error}
-          </div>
-        )}
+      <OnboardingWaitOverlay
+        open={waitMode === "bootstrap"}
+        title="Launching your marketing"
+        subtitle="Agents are working from your company profile"
+        phases={ONBOARDING_LAUNCH_PHASES}
+        finishing={waitFinishing}
+        successTitle="Posts ready!"
+        successSubtitle="Your first X content is waiting in the dashboard"
+      />
+    </>
+  );
+}
 
-        {step < 3 && (
-          <p className="text-[10px] text-slate-400 text-center mt-6">
-            We'll scan your website and analyze your market. No credit card needed.
-          </p>
-        )}
+function DetailRow({ icon: Icon, label, value }: { icon: typeof Tag; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <Icon className="h-4 w-4 text-slate-400 shrink-0" />
+      <div className="min-w-0">
+        <p className="text-xs text-slate-400">{label}</p>
+        <p className="text-sm text-slate-700 truncate">{value}</p>
       </div>
     </div>
   );

@@ -22,6 +22,8 @@ public class AgentConfigService {
     private final GmailAuthService gmailAuthService;
     private final GoogleCalendarAuthService calendarAuthService;
     private final AgentBudgetService agentBudgetService;
+    private final EmailAgentService emailAgentService;
+    private final OutreachAgentService outreachAgentService;
 
     public AgentConfigService(AgentConfigRepository configRepository,
                               ContentRepository contentRepository,
@@ -30,7 +32,9 @@ public class AgentConfigService {
                               TwitterAuthService twitterAuthService,
                               GmailAuthService gmailAuthService,
                               GoogleCalendarAuthService calendarAuthService,
-                              AgentBudgetService agentBudgetService) {
+                              AgentBudgetService agentBudgetService,
+                              EmailAgentService emailAgentService,
+                              OutreachAgentService outreachAgentService) {
         this.configRepository = configRepository;
         this.contentRepository = contentRepository;
         this.approvalRepository = approvalRepository;
@@ -39,6 +43,8 @@ public class AgentConfigService {
         this.gmailAuthService = gmailAuthService;
         this.calendarAuthService = calendarAuthService;
         this.agentBudgetService = agentBudgetService;
+        this.emailAgentService = emailAgentService;
+        this.outreachAgentService = outreachAgentService;
     }
 
     @Transactional
@@ -140,6 +146,10 @@ public class AgentConfigService {
         status.put("scheduledCount", scheduled);
         status.put("pendingApprovalContentCount", pendingApproval);
         status.put("pendingApprovalsCount", pendingApprovals);
+        status.put("emailDraftsThisWeek", emailAgentService.countDraftsThisWeek(companyId));
+        status.put("pendingEmailDraftsCount", emailAgentService.countPendingEmailDrafts(companyId));
+        status.put("outreachDraftsThisWeek", outreachAgentService.countOutreachDraftsThisWeek(companyId));
+        status.put("pendingOutreachCount", outreachAgentService.countPendingOutreach(companyId));
         status.put("twitterConnected", twitterAuthService.isConnected(companyId));
         status.put("gmailConnected", gmailAuthService.isConnected(companyId));
         status.put("calendarConnected", calendarAuthService.isConnected(companyId));

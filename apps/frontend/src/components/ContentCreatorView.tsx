@@ -291,7 +291,13 @@ export function ContentCreatorView({ companyId }: Props) {
     try {
       const result = await publishContent(companyId, selectedItem.contentId);
       if (result.status === "published") {
-        setActionMessage({ type: "success", text: `Published to Twitter! 🎉 ${result.url || ""}` });
+        const withImage = selectedItem.imageUrl && result.message?.toLowerCase().includes("image");
+        setActionMessage({
+          type: "success",
+          text: withImage
+            ? `Published to Twitter with image! 🎉 ${result.url || ""}`
+            : `Published to Twitter! 🎉 ${result.url || ""}`,
+        });
       } else {
         const msg = result.message || "Publishing failed";
         const isBillingError = msg.includes("402") || msg.toLowerCase().includes("credit");

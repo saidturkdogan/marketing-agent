@@ -133,6 +133,65 @@ public class TwitterAnalyticsService {
         return result;
     }
 
+    public Map<String, Object> fetchTweetMetrics(String companyId, String tweetId) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("connected", false);
+
+        if (tweetId == null || tweetId.isBlank()) {
+            result.put("message", "Tweet id missing");
+            return result;
+        }
+
+        OAuth1AccessToken token = resolveToken(companyId);
+        if (token == null || apiKey.isBlank() || apiSecret.isBlank()) {
+            result.put("message", "Twitter not connected or API keys missing");
+            return result;
+        }
+
+        try {
+            OAuthRequest request = new OAuthRequest(Verb.GET,
+                    "https://api.twitter.com/2/tweets/" + tweetId
+                            + "?tweet.fields=public_metrics,created_at,text");
+            OAuth10aService oAuthService = buildOAuthService();
+            oAuthService.signRequest(token, request);
+            Response response = oAuthService.execute(request);
+
+            if (response.getCode() != 200) {
+                result.put("message", "Twitter API " + response.getCode() + ": " + response.getBody());
+                return result;
+            }
+
+            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode tweet = root.path("data");
+            if (tweet.isMissingNode()) {
+                result.put("message", "Tweet not found");
+                return result;
+            }
+
+            JsonNode metrics = tweet.path("public_metrics");
+            int likes = metrics.path("like_count").asInt(0);
+            int retweets = metrics.path("retweet_count").asInt(0);
+            int replies = metrics.path("reply_count").asInt(0);
+            int impressions = metrics.path("impression_count").asInt(0);
+
+            result.put("connected", true);
+            result.put("id", tweet.path("id").asText());
+            result.put("text", tweet.path("text").asText(""));
+            result.put("likes", likes);
+            result.put("retweets", retweets);
+            result.put("replies", replies);
+            result.put("impressions", impressions);
+            result.put("engagement", likes + retweets + replies);
+            if (tweet.has("created_at")) {
+                result.put("created_at", tweet.path("created_at").asText());
+            }
+        } catch (Exception ex) {
+            log.warn("Tweet metrics fetch failed for {}: {}", tweetId, ex.getMessage());
+            result.put("message", ex.getMessage());
+        }
+        return result;
+    }
+
     private String resolveTwitterUserId(String companyId, OAuth1AccessToken token) throws Exception {
         return twitterTokenRepository.findByCompanyId(companyId)
                 .map(TwitterTokenEntity::getTwitterUserId)

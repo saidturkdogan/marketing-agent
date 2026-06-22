@@ -1,0 +1,64 @@
+@startuml Plinth_Campaign_Workflow
+left to right direction
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam titleFontSize 14
+skinparam rectangle {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  FontColor #0F172A
+  RoundCorner 10
+}
+skinparam package {
+  BackgroundColor #FFFFFF
+  BorderColor #64748B
+  FontColor #0F172A
+}
+skinparam arrow {
+  Color #334155
+}
+
+title Figure 3. AI agent campaign workflow in Plinth
+
+rectangle "1. User creates campaign\n(company, topic, platforms)" as s1
+rectangle "2. Workflow Runner\nstarts" as s2
+
+package "3. Agent Pipeline" {
+  rectangle "Research" as s3
+  rectangle "Strategy" as s4
+  rectangle "Planner" as s5
+  rectangle "Social Writers" as s6
+  rectangle "Reviewer" as s7
+  rectangle "Analytics" as s8
+}
+
+rectangle "4. Persist assets\nto PostgreSQL" as s9
+rectangle "5. Store in RAG\n(if qualified)" as s10
+rectangle "6. Approval Pool\n(user review)" as s11
+rectangle "7. Publish to\nLinkedIn / IG / X" as s12
+rectangle "8. Schedule & sync\nGoogle Calendar" as s13
+
+s1 --> s2
+s2 --> s3
+s3 --> s4
+s4 --> s5
+s5 --> s6
+s6 --> s7
+s7 --> s8 : pass
+s8 --> s9
+s9 --> s10
+s10 --> s11
+s11 --> s12 : approved
+s12 --> s13
+
+note bottom of s7
+  If review fails,
+  workflow stops
+end note
+
+note bottom of s11
+  If rejected,
+  user edits content
+end note
+
+@enduml

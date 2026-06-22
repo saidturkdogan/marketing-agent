@@ -200,6 +200,38 @@ public class GmailFetchService {
         return llmService.generate(systemPrompt, userPrompt);
     }
 
+    @Transactional
+    public void sendAgentReply(String companyId, String messageId, String bodyText) {
+        GmailMessageEntity original = gmailMessageRepository.findByCompanyIdAndMessageId(companyId, messageId)
+                .orElseThrow(() -> new IllegalArgumentException("Email not found: " + messageId));
+
+        String to = EmailAgentService.extractReplyAddress(original.getFrom());
+        if (to.isBlank()) {
+            throw new IllegalStateException("Could not resolve reply address for message: " + messageId);
+        }
+
+        String subject = original.getSubject() != null ? original.getSubject() : "";
+        if (!subject.toLowerCase().startsWith("re:")) {
+            subject = "Re: " + subject;
+        }
+
+        sendEmail(companyId, to, subject, bodyText, original.getMessageId());
+
+        original.setAgentStatus("sent");
+        original.setAgentDraft(bodyText);
+        original.setAgentProcessedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        gmailMessageRepository.save(original);
+    }
+
+    @Transactional
+    public void markAgentReplyRejected(String companyId, String messageId) {
+        gmailMessageRepository.findByCompanyIdAndMessageId(companyId, messageId).ifPresent(message -> {
+            message.setAgentStatus("rejected");
+            message.setAgentProcessedAt(OffsetDateTime.now(ZoneOffset.UTC));
+            gmailMessageRepository.save(message);
+        });
+    }
+
     public List<GmailMessageEntity> getMockMessages(String companyId) {
         List<GmailMessageEntity> dbMessages = gmailMessageRepository.findByCompanyIdOrderByReceivedAtDesc(companyId);
         if (dbMessages.isEmpty()) {

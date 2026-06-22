@@ -33,6 +33,10 @@ type MailMessage = {
   snippet: string;
   body?: string;
   receivedAt: string;
+  agentStatus?: string;
+  agentDraft?: string;
+  agentLabel?: string;
+  agentPriority?: string;
 };
 
 const isHtml = (text: string) => {
@@ -144,18 +148,19 @@ export function MailsView({ companyId }: Props) {
   }
 
   useEffect(() => {
-    if (isConnected) {
-      loadMessages(true).then((msgs) => {
-        if (msgs && msgs.length === 0) {
-          handleFetchEmails();
-        }
-      });
-    } else {
-      setMessages([]);
-      setSelectedMail(null);
-      setLoading(false);
+    loadMessages(true).then((msgs) => {
+      if (isConnected && msgs && msgs.length === 0) {
+        handleFetchEmails();
+      }
+    });
+  }, [companyId, isConnected, loadMessages]);
+
+  useEffect(() => {
+    if (!selectedMail) return;
+    if (selectedMail.agentDraft && selectedMail.agentStatus === "pending_approval") {
+      setReplyText(selectedMail.agentDraft);
     }
-  }, [isConnected, loadMessages]);
+  }, [selectedMail?.messageId, selectedMail?.agentDraft, selectedMail?.agentStatus]);
 
   // Draft response with AI
   const handleAiDraft = async () => {
@@ -255,8 +260,19 @@ export function MailsView({ companyId }: Props) {
     }
   };
 
-  // If not connected, show clean connection view
-  if (!isConnected) {
+  // Demo inbox when Gmail not connected; full inbox when connected
+  const showDemoInbox = !isConnected;
+
+  if (showDemoInbox && loading && messages.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-gray-400 gap-2">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+        <span className="text-sm">Loading demo inbox...</span>
+      </div>
+    );
+  }
+
+  if (showDemoInbox && !loading && messages.length === 0) {
     return (
       <div className="flex h-full min-h-0 flex-col items-center justify-center text-center p-8 bg-slate-50">
         <div className="h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-4 shadow-inner">
@@ -264,7 +280,7 @@ export function MailsView({ companyId }: Props) {
         </div>
         <h3 className="text-base font-bold text-gray-900">Connect your Gmail Account</h3>
         <p className="text-xs text-gray-500 max-w-sm mt-1.5 leading-relaxed">
-          Please connect your Gmail inbox to start reading and replying to emails. If you have already connected your Google Calendar, they will sync automatically.
+          Connect Gmail for a live inbox, or run the Marketing Agent to populate the demo mailbox with AI-drafted replies.
         </p>
         {authUrl ? (
           <a href={authUrl} className="mt-4">
@@ -282,7 +298,13 @@ export function MailsView({ companyId }: Props) {
   }
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-slate-50">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-50">
+      {showDemoInbox && (
+        <div className="px-4 py-2 bg-sky-50 border-b border-sky-100 text-xs text-sky-800 text-center flex-shrink-0">
+          Demo inbox — run the Marketing Agent to auto-draft replies, or connect Gmail for live mail.
+        </div>
+      )}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* LEFT PANEL: Email List */}
       <div className="w-[380px] border-r border-gray-200 bg-white flex flex-col flex-shrink-0">
         {/* Search and Action Bar */}
@@ -346,6 +368,11 @@ export function MailsView({ companyId }: Props) {
                       <span className={`text-xs font-semibold truncate ${isSentByMe ? "text-gray-500" : "text-gray-900"}`}>
                         {isSentByMe ? "Outgoing (Reply)" : msg.from.split("<")[0].trim() || msg.from}
                       </span>
+                      {!isSentByMe && msg.agentStatus === "pending_approval" && (
+                        <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-medium bg-violet-50 text-violet-700 border border-violet-100 flex-shrink-0">
+                          Agent draft
+                        </span>
+                      )}
                       {!isSentByMe && isNoReply(msg.from) && (
                         <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-medium bg-red-50 text-red-600 border border-red-100 flex-shrink-0">
                           No Reply
@@ -460,6 +487,17 @@ export function MailsView({ companyId }: Props) {
 
             {/* Composer Footer */}
             <div className="p-4 border-t border-gray-200 bg-white flex-shrink-0">
+              {selectedMail.agentStatus === "pending_approval" && selectedMail.agentDraft && (
+                <div className="mb-3 p-2.5 bg-violet-50 border border-violet-200 rounded-lg text-xs text-violet-900 flex items-start gap-2">
+                  <Sparkles className="h-4 w-4 text-violet-600 flex-shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Email agent draft</strong>
+                    {selectedMail.agentLabel ? ` · ${selectedMail.agentLabel}` : ""}
+                    {selectedMail.agentPriority ? ` · ${selectedMail.agentPriority} priority` : ""}
+                    . Review below, then send or edit before replying.
+                  </span>
+                </div>
+              )}
               {isNoReply(selectedMail.from) && (
                 <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2 font-medium">
                   <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />
@@ -514,6 +552,7 @@ export function MailsView({ companyId }: Props) {
             </p>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

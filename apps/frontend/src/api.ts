@@ -373,6 +373,28 @@ export function updateAssetStatus(strategyId: string, type: string, index: numbe
   });
 }
 
+export function runOnboardingBootstrap(companyId: string) {
+  return request<{
+    status: string;
+    companyId: string;
+    strategyId?: string;
+    marketingScore?: number;
+    tweetCount?: number;
+    tweets?: Array<{
+      contentId: string;
+      title?: string;
+      body?: string;
+      status?: string;
+      topic?: string;
+      scheduledAt?: string;
+    }>;
+    message?: string;
+  }>(`/api/pipeline/onboarding/${companyId}`, {
+    method: "POST",
+    signal: AbortSignal.timeout(300_000),
+  });
+}
+
 export function runPipelineAssets(strategyId: string) {
   return request<ProgressiveResponse>(`/api/pipeline/assets/${strategyId}`, {
     method: "POST",
@@ -418,10 +440,14 @@ export function publishCampaignToTwitter(campaignId: string) {
 
 // ── Content Creator API ──────────────────────────────────────
 
-import type { ContentItem, CreateContentRequest } from "./types";
+import type { ContentItem, CreateContentRequest, LastPostMetrics } from "./types";
 
 export function listContents(companyId: string) {
   return request<ContentItem[]>(`/api/content/${companyId}`);
+}
+
+export function getLastPostMetrics(companyId: string) {
+  return request<LastPostMetrics>(`/api/content/${companyId}/metrics/last`);
 }
 
 export function getContent(companyId: string, contentId: string) {
@@ -505,6 +531,11 @@ export interface AgentStatus {
   scheduledCount: number;
   pendingApprovalsCount: number;
   pendingApprovalContentCount?: number;
+  emailDraftsThisWeek?: number;
+  pendingEmailDraftsCount?: number;
+  outreachEmailsPerWeek?: number;
+  outreachDraftsThisWeek?: number;
+  pendingOutreachCount?: number;
   twitterConnected: boolean;
   gmailConnected: boolean;
   calendarConnected: boolean;
@@ -554,6 +585,8 @@ export function runAgent(companyId: string) {
     budgetSkipped?: number;
     marketDataReal?: boolean;
     items?: Array<Record<string, unknown>>;
+    email?: { drafted?: number; message?: string; items?: Array<Record<string, unknown>> };
+    outreach?: { drafted?: number; message?: string; items?: Array<Record<string, unknown>> };
     budget?: Record<string, unknown>;
   }>(`/api/agent/run/${companyId}`, { method: "POST" });
 }
@@ -580,8 +613,18 @@ export interface ApprovalItem {
   approvalId: string;
   companyId?: string;
   contentId?: string;
+  gmailMessageId?: string;
+  outreachProspectId?: string;
+  outreachToEmail?: string;
+  outreachSubject?: string;
+  draftBody?: string;
+  stepName?: string;
   requestReason?: string;
   status: string;
+}
+
+export function listOutreachProspects(companyId: string) {
+  return request<Array<Record<string, unknown>>>(`/api/outreach/prospects/${companyId}`);
 }
 
 export function listApprovals(companyId: string) {

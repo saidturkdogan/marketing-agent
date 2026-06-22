@@ -480,4 +480,26 @@ export interface CreateContentRequest {
   type: ContentType;
   topic: string;
   additionalContext?: string;
+}
+
+export interface LastPostMetrics {
+  hasPost: boolean;
+  message?: string;
+  contentId?: string;
+  title?: string;
+  body?: string;
+  type?: string;
+  publishedAt?: string | null;
+  platformUrl?: string | null;
+  platformPostId?: string | null;
+  metricsAvailable?: boolean;
+  twitterConnected?: boolean;
+  metricsMessage?: string;
+  metrics?: {
+    impressions: number;
+    likes: number;
+    retweets: number;
+    replies: number;
+    engagement: number;
+  };
 }

@@ -3,6 +3,7 @@ package com.plinth.controller;
 import com.plinth.dto.request.ProgressiveRequest;
 import com.plinth.dto.response.ProgressiveResponse;
 import com.plinth.publisher.PublishResult;
+import com.plinth.service.OnboardingBootstrapService;
 import com.plinth.service.ProgressiveStrategyService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -15,9 +16,12 @@ import java.util.Map;
 public class ProgressiveController {
 
     private final ProgressiveStrategyService progressiveService;
+    private final OnboardingBootstrapService onboardingBootstrapService;
 
-    public ProgressiveController(ProgressiveStrategyService progressiveService) {
+    public ProgressiveController(ProgressiveStrategyService progressiveService,
+                                 OnboardingBootstrapService onboardingBootstrapService) {
         this.progressiveService = progressiveService;
+        this.onboardingBootstrapService = onboardingBootstrapService;
     }
 
     @PostMapping("/research")
@@ -49,6 +53,11 @@ public class ProgressiveController {
     @PostMapping("/assets/{strategyId}")
     public ProgressiveResponse runAssets(@PathVariable String strategyId) {
         return progressiveService.runAssets(strategyId);
+    }
+
+    @PostMapping("/onboarding/{companyId}")
+    public Map<String, Object> runOnboardingBootstrap(@PathVariable String companyId) {
+        return onboardingBootstrapService.bootstrap(companyId);
     }
 
     @PostMapping("/asset-status/{strategyId}")

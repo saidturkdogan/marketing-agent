@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { clearActiveUser } from "../lib/userSession";
 
 export type AuthState = {
   token: string | null;
@@ -20,8 +21,12 @@ export const useAuthStore = create<AuthState>()(
       name: null,
       userId: null,
       isSignedIn: false,
-      setAuth: (token, email, name, userId) => set({ token, email, name, userId: userId || null }),
-      clearAuth: () => set({ token: null, email: null, name: null, userId: null, isSignedIn: false }),
+      setAuth: (token, email, name, userId) =>
+        set({ token, email, name, userId: userId || null, isSignedIn: true }),
+      clearAuth: () => {
+        clearActiveUser();
+        set({ token: null, email: null, name: null, userId: null, isSignedIn: false });
+      },
       setIsSignedIn: (val) => set({ isSignedIn: val }),
     }),
     { name: "auth-storage" }

@@ -31,6 +31,21 @@ public class ApprovalEntity {
     @Column(name = "content_id", length = 36)
     private String contentId;
 
+    @Column(name = "gmail_message_id", length = 500)
+    private String gmailMessageId;
+
+    @Column(name = "draft_body", columnDefinition = "text")
+    private String draftBody;
+
+    @Column(name = "outreach_prospect_id", length = 36)
+    private String outreachProspectId;
+
+    @Column(name = "outreach_to_email", length = 500)
+    private String outreachToEmail;
+
+    @Column(name = "outreach_subject", length = 1000)
+    private String outreachSubject;
+
     @Column(name = "step_name", nullable = false)
     private String stepName;
 
@@ -70,6 +85,16 @@ public class ApprovalEntity {
     public void setCompanyId(String companyId) { this.companyId = companyId; }
     public String getContentId() { return contentId; }
     public void setContentId(String contentId) { this.contentId = contentId; }
+    public String getGmailMessageId() { return gmailMessageId; }
+    public void setGmailMessageId(String gmailMessageId) { this.gmailMessageId = gmailMessageId; }
+    public String getDraftBody() { return draftBody; }
+    public void setDraftBody(String draftBody) { this.draftBody = draftBody; }
+    public String getOutreachProspectId() { return outreachProspectId; }
+    public void setOutreachProspectId(String outreachProspectId) { this.outreachProspectId = outreachProspectId; }
+    public String getOutreachToEmail() { return outreachToEmail; }
+    public void setOutreachToEmail(String outreachToEmail) { this.outreachToEmail = outreachToEmail; }
+    public String getOutreachSubject() { return outreachSubject; }
+    public void setOutreachSubject(String outreachSubject) { this.outreachSubject = outreachSubject; }
     public String getStepName() { return stepName; }
     public void setStepName(String stepName) { this.stepName = stepName; }
     public String getStatus() { return status; }

@@ -112,6 +112,47 @@ public class ApprovalService {
         return approvalRepository.findByCompanyIdAndStatusOrderByRequestedAtDesc(companyId, "pending");
     }
 
+    @Transactional
+    public ApprovalEntity requestEmailApproval(String companyId, String gmailMessageId, String draftBody, String reason) {
+        ApprovalEntity approval = new ApprovalEntity();
+        approval.setApprovalId(UUID.randomUUID().toString());
+        approval.setCompanyId(companyId);
+        approval.setGmailMessageId(gmailMessageId);
+        approval.setDraftBody(draftBody);
+        approval.setStepName("email_reply");
+        approval.setStatus("pending");
+        approval.setRequestReason(reason);
+
+        ApprovalEntity saved = approvalRepository.save(approval);
+        log.info("Email approval requested for company {} message {} (id={})",
+                companyId, gmailMessageId, saved.getApprovalId());
+        return saved;
+    }
+
+    @Transactional
+    public ApprovalEntity requestOutreachApproval(String companyId,
+                                                  String prospectId,
+                                                  String toEmail,
+                                                  String subject,
+                                                  String draftBody,
+                                                  String reason) {
+        ApprovalEntity approval = new ApprovalEntity();
+        approval.setApprovalId(UUID.randomUUID().toString());
+        approval.setCompanyId(companyId);
+        approval.setOutreachProspectId(prospectId);
+        approval.setOutreachToEmail(toEmail);
+        approval.setOutreachSubject(subject);
+        approval.setDraftBody(draftBody);
+        approval.setStepName("outreach_send");
+        approval.setStatus("pending");
+        approval.setRequestReason(reason);
+
+        ApprovalEntity saved = approvalRepository.save(approval);
+        log.info("Outreach approval requested for company {} prospect {} (id={})",
+                companyId, prospectId, saved.getApprovalId());
+        return saved;
+    }
+
     public boolean isContentApproved(String contentId) {
         return approvalRepository.findTopByContentIdAndStatusOrderByRequestedAtDesc(contentId, "approved").isPresent();
     }
@@ -125,6 +166,11 @@ public class ApprovalService {
         map.put("approvalId", approval.getApprovalId());
         map.put("companyId", approval.getCompanyId());
         map.put("contentId", approval.getContentId());
+        map.put("gmailMessageId", approval.getGmailMessageId());
+        map.put("outreachProspectId", approval.getOutreachProspectId());
+        map.put("outreachToEmail", approval.getOutreachToEmail());
+        map.put("outreachSubject", approval.getOutreachSubject());
+        map.put("draftBody", approval.getDraftBody());
         map.put("campaignId", approval.getCampaignId());
         map.put("stepName", approval.getStepName());
         map.put("status", approval.getStatus());

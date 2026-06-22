@@ -130,9 +130,20 @@ public class PublishQueueService {
             case "linkedin" -> publishService.publishLinkedIn(job.getContent());
             case "instagram" -> publishService.publishInstagramImage(
                     job.getMediaUrl() != null ? job.getMediaUrl() : "", job.getContent());
-            case "twitter", "x" -> publishService.publishTwitter(job.getContent());
+            case "twitter", "x" -> publishService.publishTwitter(
+                    job.getContent(),
+                    resolveCompanyId(job.getCampaignId()),
+                    job.getMediaUrl());
             default -> throw new IllegalArgumentException("Unknown platform: " + job.getPlatform());
         };
+    }
+
+    private String resolveCompanyId(String campaignId) {
+        return campaignPersistenceService.getCampaign(campaignId)
+                .map(c -> c.getCompanyId())
+                .filter(id -> id != null && !id.isBlank())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Campaign not found or missing companyId: " + campaignId));
     }
 
     private void handleFailure(PublishJobEntity job, Exception ex) {

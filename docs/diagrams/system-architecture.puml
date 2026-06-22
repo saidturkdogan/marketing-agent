@@ -1,0 +1,90 @@
+@startuml Plinth_System_Architecture
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+
+title Figure 2. Layered architecture of the Plinth marketing agent application
+
+actor "User" as user
+
+package "Frontend (React + Vite)" {
+  [Onboarding UI] as onboarding
+  [Dashboard UI] as dashboard
+  [Analysis Report UI] as report
+  [Chat UI] as chat
+  [Content Creator UI] as content
+}
+
+package "Backend API (Spring Boot)" {
+  [Auth Controller] as authCtrl
+  [Company Controller] as companyCtrl
+  [Strategy Controller] as strategyCtrl
+  [Campaign Controller] as campaignCtrl
+  [Content Controller] as contentCtrl
+  [Agent Controller] as agentCtrl
+  [Gmail / Calendar / Twitter Controllers] as integrationCtrl
+}
+
+package "Services & Workflow" {
+  [Strategy Service] as strategySvc
+  [Progressive Strategy Service] as progressiveSvc
+  [Campaign Workflow Runner] as workflow
+  [Agent Steps\n(Research, Strategy, Planner,\nSocial Writers, Reviewer, Analytics)] as steps
+  [LLM Service] as llm
+  [RAG / Embedding Service] as rag
+}
+
+package "External Services" {
+  [LLM Provider] as llmApi
+  [LinkedIn API] as linkedin
+  [Meta / Instagram API] as meta
+  [Twitter/X API] as twitter
+  [Gmail API] as gmail
+  [Google Calendar API] as gcal
+  [Clerk Auth] as clerk
+}
+
+database "PostgreSQL\n(+ pgvector)" as db
+
+user --> onboarding
+user --> dashboard
+user --> report
+user --> chat
+user --> content
+
+onboarding --> authCtrl
+onboarding --> companyCtrl
+onboarding --> strategyCtrl
+dashboard --> strategyCtrl
+dashboard --> agentCtrl
+dashboard --> contentCtrl
+dashboard --> integrationCtrl
+report --> strategyCtrl
+chat --> agentCtrl
+content --> contentCtrl
+content --> campaignCtrl
+
+authCtrl --> clerk
+companyCtrl --> db
+strategyCtrl --> strategySvc
+strategyCtrl --> progressiveSvc
+campaignCtrl --> workflow
+contentCtrl --> db
+agentCtrl --> workflow
+integrationCtrl --> gmail
+integrationCtrl --> gcal
+integrationCtrl --> twitter
+
+strategySvc --> llm
+progressiveSvc --> strategySvc
+workflow --> steps
+steps --> llm
+steps --> rag
+rag --> db
+workflow --> db
+llm --> llmApi
+campaignCtrl --> linkedin
+campaignCtrl --> meta
+campaignCtrl --> twitter
+
+@enduml

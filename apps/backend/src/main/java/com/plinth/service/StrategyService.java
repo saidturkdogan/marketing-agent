@@ -284,6 +284,7 @@ public class StrategyService {
     }
 
     public DashboardResponse getDashboard(String companyId) {
+        companyService.requireOwnedCompany(companyId);
         StrategyEntity entity = strategyRepository.findTopByCompanyIdOrderByCreatedAtDesc(companyId)
                 .orElse(null);
 

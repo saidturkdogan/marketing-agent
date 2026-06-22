@@ -42,6 +42,8 @@ public class MarketingAgentOrchestrator {
     private final ContentReviewService contentReviewService;
     private final AgentBudgetService agentBudgetService;
     private final AgentLearningService agentLearningService;
+    private final EmailAgentService emailAgentService;
+    private final OutreachAgentService outreachAgentService;
 
     public MarketingAgentOrchestrator(AgentConfigService agentConfigService,
                                       CompanyRepository companyRepository,
@@ -55,7 +57,9 @@ public class MarketingAgentOrchestrator {
                                       MarketingAgentPlannerService plannerService,
                                       ContentReviewService contentReviewService,
                                       AgentBudgetService agentBudgetService,
-                                      AgentLearningService agentLearningService) {
+                                      AgentLearningService agentLearningService,
+                                      EmailAgentService emailAgentService,
+                                      OutreachAgentService outreachAgentService) {
         this.agentConfigService = agentConfigService;
         this.companyRepository = companyRepository;
         this.companyService = companyService;
@@ -69,6 +73,8 @@ public class MarketingAgentOrchestrator {
         this.contentReviewService = contentReviewService;
         this.agentBudgetService = agentBudgetService;
         this.agentLearningService = agentLearningService;
+        this.emailAgentService = emailAgentService;
+        this.outreachAgentService = outreachAgentService;
     }
 
     @Transactional
@@ -97,15 +103,41 @@ public class MarketingAgentOrchestrator {
             String marketSummary = marketPerceptionService.summarizeForPrompt(marketBrief);
             log.info("[Agent] Run {} perceive complete for {}", runId, companyId);
 
+            Map<String, Object> emailResult = emailAgentService.runEmailCycle(companyId, config, runId, profile);
+            Map<String, Object> outreachResult = outreachAgentService.runOutreachCycle(
+                    companyId, config, runId, profile, marketBrief);
+
+            List<Map<String, Object>> allItemResults = new ArrayList<>();
+            int channelPending = appendChannelItems(allItemResults, emailResult);
+            channelPending += appendChannelItems(allItemResults, outreachResult);
+
             int target = config.getTwitterPostsPerWeek();
             int existing = countActiveTwitterPostsThisWeek(companyId);
             int toCreate = Math.max(0, target - existing);
 
             if (toCreate == 0) {
-                String message = "Weekly target already met (" + existing + "/" + target + " posts)";
+                String message = String.format(
+                        "Twitter target already met (%d/%d). %s %s",
+                        existing, target,
+                        emailResult.getOrDefault("message", ""),
+                        outreachResult.getOrDefault("message", ""));
                 agentConfigService.recordRun(companyId, "success", message);
-                return Map.of("status", "success", "created", 0, "scheduled", 0,
-                        "pendingApproval", 0, "message", message, "runId", runId);
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("status", "success");
+                result.put("runId", runId);
+                result.put("created", 0);
+                result.put("scheduled", 0);
+                result.put("pendingApproval", channelPending);
+                result.put("failed", 0);
+                result.put("budgetSkipped", 0);
+                result.put("message", message);
+                result.put("items", allItemResults);
+                result.put("email", emailResult);
+                result.put("outreach", outreachResult);
+                result.put("marketDataReal", marketBrief.get("has_real_connectors"));
+                result.put("budget", agentBudgetService.budgetStatus(companyId));
+                agentLearningService.recordWeeklyLearnings(companyId, result);
+                return result;
             }
 
             List<PlannedTopic> plannedTopics = plannerService.planTopics(
@@ -114,10 +146,10 @@ public class MarketingAgentOrchestrator {
             log.info("[Agent] Run {} planned {} topics", runId, plannedTopics.size());
 
             int scheduled = 0;
-            int pendingApproval = 0;
-            int failed = 0;
+            int pendingApproval = channelPending;
+            int failed = channelDraftFailures(emailResult) + channelDraftFailures(outreachResult);
             int budgetSkipped = 0;
-            List<Map<String, Object>> itemResults = new ArrayList<>();
+            List<Map<String, Object>> itemResults = new ArrayList<>(allItemResults);
 
             for (int i = 0; i < toCreate; i++) {
                 if (!agentBudgetService.canSpendLlm(companyId)) {
@@ -156,8 +188,10 @@ public class MarketingAgentOrchestrator {
             }
 
             String message = String.format(
-                    "Agent cycle: %d planned, %d scheduled, %d pending approval, %d failed, %d budget-skipped",
-                    toCreate, scheduled, pendingApproval, failed, budgetSkipped);
+                    "Agent cycle: %d tweets planned, %d scheduled, %d pending approval, %d failed. %s %s",
+                    toCreate, scheduled, pendingApproval, failed,
+                    emailResult.getOrDefault("message", ""),
+                    outreachResult.getOrDefault("message", ""));
             agentConfigService.recordRun(companyId, "success", message);
             log.info("[Agent] Run {} complete: {}", runId, message);
 
@@ -171,6 +205,8 @@ public class MarketingAgentOrchestrator {
             result.put("budgetSkipped", budgetSkipped);
             result.put("message", message);
             result.put("items", itemResults);
+            result.put("email", emailResult);
+            result.put("outreach", outreachResult);
             result.put("marketDataReal", marketBrief.get("has_real_connectors"));
             result.put("budget", agentBudgetService.budgetStatus(companyId));
 
@@ -261,6 +297,17 @@ public class MarketingAgentOrchestrator {
                 + "Planned rationale: " + planned.rationale() + "\n"
                 + "Priority: " + planned.priority() + "\n"
                 + marketPerceptionService.summarizeForPrompt(marketBrief);
+    }
+
+    @SuppressWarnings("unchecked")
+    private int appendChannelItems(List<Map<String, Object>> target, Map<String, Object> channelResult) {
+        List<Map<String, Object>> items = (List<Map<String, Object>>) channelResult.getOrDefault("items", List.of());
+        target.addAll(items);
+        return ((Number) channelResult.getOrDefault("drafted", 0)).intValue();
+    }
+
+    private int channelDraftFailures(Map<String, Object> channelResult) {
+        return ((Number) channelResult.getOrDefault("failed", 0)).intValue();
     }
 
     private int countActiveTwitterPostsThisWeek(String companyId) {

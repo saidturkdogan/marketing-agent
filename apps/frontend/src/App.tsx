@@ -10,11 +10,8 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { AnalysisReportPage } from "./pages/AnalysisReportPage";
 import { ProgressivePipelinePage } from "./pages/ProgressivePipelinePage";
 import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
-
-function LastDashboardRedirect() {
-  const last = sessionStorage.getItem("plinth-last-dashboard");
-  return <Navigate to={last || "/dashboard/"} replace />;
-}
+import { PostLoginRedirect } from "./components/PostLoginRedirect";
+import { noteActiveUser } from "./lib/userSession";
 
 type Props = { clerkEnabled: boolean };
 
@@ -29,7 +26,7 @@ function ClerkApp() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const { user } = useUser();
   const setAuth = useAuthStore((s) => s.setAuth);
-  const syncedRef = useRef(false);
+  const lastClerkUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setTokenGetter(
@@ -45,16 +42,20 @@ function ClerkApp() {
   }, [isSignedIn, getToken]);
 
   useEffect(() => {
-    if (isSignedIn && user && !syncedRef.current) {
-      syncedRef.current = true;
+    if (!isSignedIn || !user) {
+      lastClerkUserIdRef.current = null;
+      useAuthStore.getState().clearAuth();
+      return;
+    }
+
+    const clerkId = user.id;
+    const switched = noteActiveUser(clerkId);
+    if (switched || lastClerkUserIdRef.current !== clerkId) {
+      lastClerkUserIdRef.current = clerkId;
       const email = user.primaryEmailAddress?.emailAddress ?? "";
       const name = user.fullName ?? user.firstName ?? email;
-      setAuth("clerk", email, name, user.id);
-      syncClerkUser(user.id, email, name).catch(() => {});
-    }
-    if (!isSignedIn) {
-      syncedRef.current = false;
-      useAuthStore.getState().clearAuth();
+      setAuth("clerk", email, name, clerkId);
+      syncClerkUser(clerkId, email, name).catch(() => {});
     }
   }, [isSignedIn, user, setAuth]);
 
@@ -68,7 +69,7 @@ function ClerkApp() {
 
   return (
     <Routes>
-      <Route path="/login" element={isSignedIn ? <LastDashboardRedirect /> : <ClerkAuthPage />} />
+      <Route path="/login" element={isSignedIn ? <PostLoginRedirect /> : <ClerkAuthPage />} />
       <Route path="/onboarding" element={isSignedIn ? <OnboardingPage clerkEnabled /> : <Navigate to="/login" replace />} />
       <Route path="/report/:companyId" element={isSignedIn ? <AnalysisReportPage /> : <Navigate to="/login" replace />} />
       <Route path="/pipeline/:companyId" element={isSignedIn ? <ProgressivePipelinePage /> : <Navigate to="/login" replace />} />
@@ -76,7 +77,7 @@ function ClerkApp() {
       <Route path="/dashboard/:companyId" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/" element={isSignedIn ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
-      <Route path="*" element={<Navigate to={isSignedIn ? "/dashboard/" : "/login"} replace />} />
+      <Route path="*" element={isSignedIn ? <PostLoginRedirect /> : <Navigate to="/login" replace />} />
     </Routes>
   );
 }
@@ -90,7 +91,7 @@ function DefaultApp() {
 
   return (
     <Routes>
-      <Route path="/login" element={token ? <LastDashboardRedirect /> : <LoginPage />} />
+      <Route path="/login" element={token ? <PostLoginRedirect /> : <LoginPage />} />
       <Route path="/onboarding" element={token ? <OnboardingPage /> : <Navigate to="/login" replace />} />
       <Route path="/report/:companyId" element={token ? <AnalysisReportPage /> : <Navigate to="/login" replace />} />
       <Route path="/pipeline/:companyId" element={token ? <ProgressivePipelinePage /> : <Navigate to="/login" replace />} />
@@ -98,7 +99,7 @@ function DefaultApp() {
       <Route path="/dashboard/:companyId" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard/" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
-      <Route path="*" element={<Navigate to={token ? "/dashboard/" : "/login"} replace />} />
+      <Route path="*" element={token ? <PostLoginRedirect /> : <Navigate to="/login" replace />} />
     </Routes>
   );
 }

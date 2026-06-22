@@ -11,11 +11,11 @@ const LOAD_STEPS: Step[] = [
 ];
 
 const RUN_STEPS: Step[] = [
-  { id: "perceive", label: "Perceive", detail: "Reading live market signals" },
+  { id: "perceive", label: "Analysis", detail: "Market signals & performance insights" },
   { id: "plan", label: "Plan", detail: "Choosing topics & schedule slots" },
-  { id: "generate", label: "Generate", detail: "Drafting platform content" },
+  { id: "generate", label: "X Agent", detail: "Drafting tweets & visual content" },
   { id: "review", label: "Review", detail: "Running guardrails & QA" },
-  { id: "act", label: "Act", detail: "Scheduling & requesting approval" },
+  { id: "act", label: "Mail & Outreach", detail: "Inbox replies & cold email drafts" },
 ];
 
 type Props = {

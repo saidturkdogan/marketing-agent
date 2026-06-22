@@ -23,6 +23,12 @@ public class ContentController {
         return ResponseEntity.ok(contentService.listContents(companyId));
     }
 
+    /** Metrics for the most recently published post */
+    @GetMapping("/{companyId}/metrics/last")
+    public ResponseEntity<Map<String, Object>> getLastPostMetrics(@PathVariable String companyId) {
+        return ResponseEntity.ok(contentService.getLastPostMetrics(companyId));
+    }
+
     /** Get a single content item */
     @GetMapping("/{companyId}/{contentId}")
     public ResponseEntity<Map<String, Object>> getContent(

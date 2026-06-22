@@ -1,0 +1,85 @@
+@startuml Plinth_Use_Case_Diagram
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  FontColor #0F172A
+}
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #64748B
+}
+
+title Figure 1. Use case diagram of the Plinth marketing agent application
+
+actor "User" as user
+
+rectangle "Plinth Marketing Agent" {
+  package "Authentication" {
+    usecase "Sign in / Register" as UC1
+  }
+
+  package "Onboarding & Profile" {
+    usecase "Complete onboarding" as UC2
+    usecase "Manage company profile" as UC3
+    usecase "Analyze website" as UC4
+  }
+
+  package "Strategy & Analysis" {
+    usecase "Run strategy analysis" as UC5
+    usecase "Run progressive pipeline" as UC6
+    usecase "View analysis report" as UC7
+  }
+
+  package "AI Agent & Campaigns" {
+    usecase "Create campaign" as UC8
+    usecase "Configure agent" as UC9
+    usecase "Chat with agent" as UC10
+  }
+
+  package "Content & Publishing" {
+    usecase "Generate and edit content" as UC11
+    usecase "Approve / reject content" as UC12
+    usecase "Publish to social media" as UC13
+    usecase "Schedule content" as UC14
+  }
+
+  package "Integrations" {
+    usecase "Connect Gmail" as UC15
+    usecase "Sync Google Calendar" as UC16
+    usecase "Connect Twitter/X" as UC17
+  }
+}
+
+user --> UC1
+user --> UC2
+user --> UC3
+user --> UC5
+user --> UC6
+user --> UC7
+user --> UC8
+user --> UC9
+user --> UC10
+user --> UC11
+user --> UC12
+user --> UC13
+user --> UC14
+user --> UC15
+user --> UC16
+user --> UC17
+
+UC2 ..> UC4 : <<include>>
+UC6 ..> UC5 : <<include>>
+UC8 ..> UC11 : <<include>>
+UC13 ..> UC12 : <<extend>>
+UC14 ..> UC16 : <<extend>>
+
+note right of UC12
+  Content must pass review
+  before publishing
+end note
+
+@enduml

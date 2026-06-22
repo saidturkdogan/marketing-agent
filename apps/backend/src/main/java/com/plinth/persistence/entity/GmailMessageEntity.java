@@ -45,6 +45,21 @@ public class GmailMessageEntity {
     @Column(name = "fetched_at", nullable = false)
     private OffsetDateTime fetchedAt;
 
+    @Column(name = "agent_status", length = 30)
+    private String agentStatus = "none";
+
+    @Column(name = "agent_draft", columnDefinition = "text")
+    private String agentDraft;
+
+    @Column(name = "agent_label", length = 50)
+    private String agentLabel;
+
+    @Column(name = "agent_priority", length = 20)
+    private String agentPriority;
+
+    @Column(name = "agent_processed_at")
+    private OffsetDateTime agentProcessedAt;
+
     @PrePersist
     void onCreate() {
         this.fetchedAt = OffsetDateTime.now();
@@ -68,4 +83,14 @@ public class GmailMessageEntity {
     public OffsetDateTime getReceivedAt() { return receivedAt; }
     public void setReceivedAt(OffsetDateTime receivedAt) { this.receivedAt = receivedAt; }
     public OffsetDateTime getFetchedAt() { return fetchedAt; }
+    public String getAgentStatus() { return agentStatus; }
+    public void setAgentStatus(String agentStatus) { this.agentStatus = agentStatus; }
+    public String getAgentDraft() { return agentDraft; }
+    public void setAgentDraft(String agentDraft) { this.agentDraft = agentDraft; }
+    public String getAgentLabel() { return agentLabel; }
+    public void setAgentLabel(String agentLabel) { this.agentLabel = agentLabel; }
+    public String getAgentPriority() { return agentPriority; }
+    public void setAgentPriority(String agentPriority) { this.agentPriority = agentPriority; }
+    public OffsetDateTime getAgentProcessedAt() { return agentProcessedAt; }
+    public void setAgentProcessedAt(OffsetDateTime agentProcessedAt) { this.agentProcessedAt = agentProcessedAt; }
 }
