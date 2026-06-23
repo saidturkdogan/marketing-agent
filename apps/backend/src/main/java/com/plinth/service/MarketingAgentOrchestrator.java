@@ -150,6 +150,7 @@ public class MarketingAgentOrchestrator {
             int failed = channelDraftFailures(emailResult) + channelDraftFailures(outreachResult);
             int budgetSkipped = 0;
             List<Map<String, Object>> itemResults = new ArrayList<>(allItemResults);
+            List<String> previousTweetBodies = new ArrayList<>();
 
             for (int i = 0; i < toCreate; i++) {
                 if (!agentBudgetService.canSpendLlm(companyId)) {
@@ -166,8 +167,13 @@ public class MarketingAgentOrchestrator {
                 try {
                     Map<String, Object> itemResult = processOneItem(
                             runId, companyId, company.getUserId(), config, profile,
-                            planned, slot, marketBrief, marketSummary);
+                            planned, slot, marketBrief, marketSummary, previousTweetBodies);
                     itemResults.add(itemResult);
+                    Object contentId = itemResult.get("contentId");
+                    if (contentId != null) {
+                        contentRepository.findByContentId(contentId.toString())
+                                .ifPresent(entity -> previousTweetBodies.add(entity.getBody()));
+                    }
 
                     String outcome = String.valueOf(itemResult.get("outcome"));
                     switch (outcome) {
@@ -223,11 +229,12 @@ public class MarketingAgentOrchestrator {
                                                PlannedTopic planned,
                                                AgentSchedulePlanner.ScheduleSlot slot,
                                                Map<String, Object> marketBrief,
-                                               String marketSummary) {
-        String agentContext = buildAgentContext(marketBrief, planned);
+                                               String marketSummary,
+                                               List<String> previousTweetBodies) {
+        String agentContext = buildAgentContext(marketBrief, planned, previousTweetBodies);
 
         ContentEntity entity = contentService.generateContentForAgent(
-                companyId, userId, "tweet", planned.topic(), agentContext);
+                companyId, userId, "tweet", planned.topic(), agentContext, previousTweetBodies);
 
         ContentReviewResult review = reviewWithCorrectionLoop(
                 runId, entity, profile, planned, agentContext, marketSummary, config);
@@ -292,11 +299,22 @@ public class MarketingAgentOrchestrator {
         return true;
     }
 
-    private String buildAgentContext(Map<String, Object> marketBrief, PlannedTopic planned) {
-        return "Autopilot agent content\n"
-                + "Planned rationale: " + planned.rationale() + "\n"
-                + "Priority: " + planned.priority() + "\n"
-                + marketPerceptionService.summarizeForPrompt(marketBrief);
+    private String buildAgentContext(Map<String, Object> marketBrief,
+                                     PlannedTopic planned,
+                                     List<String> previousTweetBodies) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Autopilot agent content\n");
+        sb.append("Planned rationale: ").append(planned.rationale()).append("\n");
+        sb.append("Priority: ").append(planned.priority()).append("\n");
+        sb.append("Unique angle required: write a tweet that is clearly different from other drafts this week.\n");
+        if (previousTweetBodies != null && !previousTweetBodies.isEmpty()) {
+            sb.append("\nAlready drafted in this run — use a different hook, angle, and wording:\n");
+            for (int i = 0; i < previousTweetBodies.size(); i++) {
+                sb.append(i + 1).append(". ").append(previousTweetBodies.get(i)).append("\n");
+            }
+        }
+        sb.append(marketPerceptionService.summarizeForPrompt(marketBrief));
+        return sb.toString();
     }
 
     @SuppressWarnings("unchecked")

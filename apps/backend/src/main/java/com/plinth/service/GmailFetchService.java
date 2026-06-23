@@ -188,16 +188,79 @@ public class GmailFetchService {
                     company.getTargetAudience() != null ? company.getTargetAudience() : "");
         }
 
-        String systemPrompt = "You are a professional marketing assistant. " +
-                "Draft a polite, helpful and professional response to the customer's email. " +
-                "Write ONLY the email body response. Do not include subject lines, placeholders, or headers. " +
-                "Sign off cleanly. Keep it short (under 150 words). " +
-                "Here is the brand context: " + brandContext;
+        String plainIncoming = toPlainEmailText(emailBody);
+        if (plainIncoming.length() > 2000) {
+            plainIncoming = plainIncoming.substring(0, 2000) + "...";
+        }
 
-        String userPrompt = String.format("Reply to this email from '%s':\nSubject: %s\nBody: %s",
-                senderName, emailSubject, emailBody);
+        String systemPrompt = """
+                You are a professional marketing assistant drafting inbox replies.
+                Write ONLY the email body in plain text.
+                Rules:
+                - Do not include Subject lines, headers, markdown, JSON, or placeholders
+                - Start with a natural greeting using the sender's name when provided
+                - Keep it under 150 words
+                - End with a clean sign-off using the company name from brand context
+                Brand context: """ + brandContext;
 
-        return llmService.generate(systemPrompt, userPrompt);
+        String userPrompt = String.format("""
+                Reply to this email from '%s'.
+                Subject: %s
+                Message:
+                %s
+                """, senderName, emailSubject != null ? emailSubject : "", plainIncoming);
+
+        return cleanDraftBody(llmService.generate(systemPrompt, userPrompt));
+    }
+
+    static String toPlainEmailText(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        if (looksLikeHtml(raw)) {
+            return htmlToPlainText(raw);
+        }
+        return raw.trim();
+    }
+
+    static String cleanDraftBody(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String body = raw.trim();
+        body = body.replaceAll("(?s)```.*?```", "").trim();
+        body = body.replaceAll("(?im)^subject:.*\\n?", "");
+        body = body.replaceAll("(?im)^body:.*\\n?", "");
+        body = body.replaceFirst("(?is)^here(?:'s| is) (?:the |your )?(?:email )?(?:reply|response)[:\s-]*", "");
+        if (looksLikeHtml(body)) {
+            body = htmlToPlainText(body);
+        }
+        return body.trim();
+    }
+
+    private static boolean looksLikeHtml(String text) {
+        String trimmed = text.trim().toLowerCase();
+        return trimmed.startsWith("<") || trimmed.contains("<html") || trimmed.contains("<body")
+                || trimmed.contains("<div") || trimmed.contains("<p>") || trimmed.contains("<table");
+    }
+
+    private static String htmlToPlainText(String html) {
+        String text = html
+                .replaceAll("(?is)<style[^>]*>.*?</style>", " ")
+                .replaceAll("(?is)<script[^>]*>.*?</script>", " ")
+                .replaceAll("(?is)<br\\s*/?>", "\n")
+                .replaceAll("(?is)</p>", "\n\n")
+                .replaceAll("(?is)</div>", "\n")
+                .replaceAll("(?is)</tr>", "\n")
+                .replaceAll("(?is)</li>", "\n")
+                .replaceAll("(?is)<[^>]+>", " ")
+                .replace("&nbsp;", " ")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&#39;", "'")
+                .replace("&quot;", "\"");
+        return text.replaceAll("[ \\t]+", " ").replaceAll("\\n{3,}", "\n\n").trim();
     }
 
     @Transactional
@@ -282,25 +345,37 @@ public class GmailFetchService {
 
     private String getTextFromMimeMessage(jakarta.mail.Part p) throws Exception {
         if (p.isMimeType("text/*")) {
-            return (String) p.getContent();
+            String content = (String) p.getContent();
+            if (p.isMimeType("text/html")) {
+                return htmlToPlainText(content);
+            }
+            return content;
         }
 
         if (p.isMimeType("multipart/alternative")) {
             jakarta.mail.internet.MimeMultipart mp = (jakarta.mail.internet.MimeMultipart) p.getContent();
-            String text = null;
+            String plain = null;
+            String html = null;
             for (int i = 0; i < mp.getCount(); i++) {
                 jakarta.mail.Part bp = mp.getBodyPart(i);
                 if (bp.isMimeType("text/plain")) {
-                    if (text == null) text = getTextFromMimeMessage(bp);
+                    plain = getTextFromMimeMessage(bp);
                 } else if (bp.isMimeType("text/html")) {
-                    String s = getTextFromMimeMessage(bp);
-                    if (s != null) return s;
+                    html = getTextFromMimeMessage(bp);
                 } else {
                     String s = getTextFromMimeMessage(bp);
-                    if (s != null) text = s;
+                    if (s != null && plain == null) {
+                        plain = s;
+                    }
                 }
             }
-            return text;
+            if (plain != null && !plain.isBlank()) {
+                return plain;
+            }
+            if (html != null && !html.isBlank()) {
+                return htmlToPlainText(html);
+            }
+            return plain;
         } else if (p.isMimeType("multipart/*")) {
             jakarta.mail.internet.MimeMultipart mp = (jakarta.mail.internet.MimeMultipart) p.getContent();
             for (int i = 0; i < mp.getCount(); i++) {

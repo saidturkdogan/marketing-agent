@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -30,13 +31,12 @@ public class MarketPerceptionService {
     }
 
     public Map<String, Object> buildMarketBrief(String companyId, CompanyProfile profile, StrategyEntity strategy) {
-        String researchTopic = profile.industry() != null && !profile.industry().isBlank()
-                ? profile.industry()
-                : profile.name();
+        String trendsQuery = resolveTrendsQuery(profile, strategy);
 
         Map<String, Object> brief = new LinkedHashMap<>();
-        brief.put("research_topic", researchTopic);
-        brief.put("external_data", externalDataService.enrichWithExternalData(researchTopic, companyId));
+        brief.put("research_topic", trendsQuery);
+        brief.put("trends_query", trendsQuery);
+        brief.put("external_data", externalDataService.enrichWithExternalData(trendsQuery, companyId));
         brief.put("has_real_connectors", externalDataService.hasRealConnectors());
         brief.put("strategy_calendar", strategy != null ? strategy.getCalendar() : Map.of());
         brief.put("strategy_pillars", extractPillars(strategy));
@@ -71,6 +71,7 @@ public class MarketPerceptionService {
     public Map<String, Object> buildUiSignals(Map<String, Object> brief) {
         Map<String, Object> ui = new LinkedHashMap<>();
         ui.put("researchTopic", brief.get("research_topic"));
+        ui.put("trendsQuery", brief.get("trends_query"));
         ui.put("hasRealConnectors", brief.get("has_real_connectors"));
         ui.put("strategyPillars", brief.get("strategy_pillars"));
 
@@ -316,5 +317,100 @@ public class MarketPerceptionService {
     private String truncate(String value, int max) {
         if (value == null) return "";
         return value.length() <= max ? value : value.substring(0, max) + "...";
+    }
+
+    /**
+     * Builds a Google Trends query from industry + product/category signals.
+     * Brand names alone (e.g. "Ovura") produce misleading 0→100 relative indexes,
+     * so the company name is only used as a last resort.
+     */
+    String resolveTrendsQuery(CompanyProfile profile, StrategyEntity strategy) {
+        LinkedHashMap<String, String> terms = new LinkedHashMap<>();
+        String companyName = normalizeComparable(profile.name());
+
+        addTrendTerm(terms, profile.industry(), companyName);
+        addTrendTerm(terms, firstMeaningfulProduct(profile, companyName), companyName);
+        addTrendTerm(terms, shortPhrase(profile.coreValueProp(), 4), companyName);
+        addTrendTerm(terms, shortPhrase(profile.valueProposition(), 4), companyName);
+
+        for (String pillar : extractPillars(strategy)) {
+            if (terms.size() >= 2) {
+                break;
+            }
+            addTrendTerm(terms, pillar, companyName);
+        }
+
+        if (terms.isEmpty()) {
+            addTrendTerm(terms, shortPhrase(profile.description(), 5), companyName);
+        }
+
+        if (terms.isEmpty() && profile.name() != null && !profile.name().isBlank()) {
+            terms.put(normalizeComparable(profile.name()), profile.name().trim());
+        }
+
+        if (terms.isEmpty()) {
+            return "marketing";
+        }
+
+        return String.join(" ", terms.values().stream().limit(2).toList());
+    }
+
+    private void addTrendTerm(Map<String, String> terms, String candidate, String companyName) {
+        if (candidate == null || candidate.isBlank()) {
+            return;
+        }
+        String trimmed = candidate.trim();
+        if (trimmed.isBlank()) {
+            return;
+        }
+        String comparable = normalizeComparable(trimmed);
+        if (comparable.isBlank() || comparable.equals(companyName)) {
+            return;
+        }
+        if (comparable.length() < 3) {
+            return;
+        }
+        terms.putIfAbsent(comparable, trimmed);
+    }
+
+    private String firstMeaningfulProduct(CompanyProfile profile, String companyName) {
+        if (profile.productName() != null && !profile.productName().isBlank()) {
+            String product = profile.productName().trim();
+            if (!normalizeComparable(product).equals(companyName)) {
+                return product;
+            }
+        }
+        if (profile.productsOrServices() == null) {
+            return null;
+        }
+        for (String item : profile.productsOrServices()) {
+            if (item == null || item.isBlank()) {
+                continue;
+            }
+            String trimmed = item.trim();
+            if (!normalizeComparable(trimmed).equals(companyName)) {
+                return trimmed;
+            }
+        }
+        return null;
+    }
+
+    private String shortPhrase(String text, int maxWords) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String[] words = text.trim().split("\\s+");
+        if (words.length == 0) {
+            return null;
+        }
+        int limit = Math.min(maxWords, words.length);
+        return String.join(" ", java.util.Arrays.copyOfRange(words, 0, limit));
+    }
+
+    private String normalizeComparable(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "").trim();
     }
 }

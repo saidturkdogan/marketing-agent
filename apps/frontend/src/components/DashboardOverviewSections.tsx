@@ -14,12 +14,10 @@ import {
   TrendingUp,
   Twitter,
   X,
-  Zap,
-  Search,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { AgentStatus, ApprovalItem } from "../api";
-import type { DashboardData, Opportunity, StrategicPillar, LastPostMetrics } from "../types";
+import type { Opportunity, StrategicPillar, LastPostMetrics } from "../types";
 import type { MarketSignals } from "./MarketSignalsView";
 import { Button } from "./ui/button";
 
@@ -97,106 +95,23 @@ function IntegrationPill({
   );
 }
 
-// ── Header: greeting + score + KPIs ─────────────────────────────
+// ── Header: greeting ─────────────────────────────────────────────
 
 export function DashboardHeaderSection({
   date,
   greeting,
   userName,
-  marketingScore,
-  dashboardData,
 }: {
   date: string;
   greeting: string;
   userName?: string;
-  marketingScore: number;
-  dashboardData: DashboardData | null;
 }) {
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-sm text-gray-500 mb-1">{date}</p>
-        <h1 className="text-3xl font-bold text-gray-900">
-          {greeting}, {userName?.split(" ")[0] || "User"}
-        </h1>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MarketingScoreCard score={marketingScore} />
-        <KpiCard
-          icon={<Target className="h-5 w-5 text-blue-600" />}
-          value={dashboardData?.contentOpportunities ?? 0}
-          label="Content opportunities"
-          hint="Topics competitors cover"
-        />
-        <KpiCard
-          icon={<Zap className="h-5 w-5 text-amber-600" />}
-          value={dashboardData?.competitorWeaknesses ?? 0}
-          label="Competitor gaps"
-          hint="Areas to differentiate"
-        />
-        <KpiCard
-          icon={<Search className="h-5 w-5 text-emerald-600" />}
-          value={dashboardData?.keywordsFound ?? 0}
-          label="Keywords found"
-          hint="SEO opportunities"
-        />
-      </div>
-    </div>
-  );
-}
-
-function MarketingScoreCard({ score }: { score: number }) {
-  const grade = score >= 80 ? "A" : score >= 60 ? "B" : score >= 40 ? "C" : "D";
-  const gradeColor =
-    score >= 80 ? "text-emerald-600" : score >= 60 ? "text-sky-600" : score >= 40 ? "text-amber-600" : "text-red-600";
-
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex items-center gap-4">
-      <div className="relative h-16 w-16 shrink-0">
-        <svg className="h-16 w-16 -rotate-90" viewBox="0 0 36 36">
-          <circle cx="18" cy="18" r="15.5" fill="none" stroke="#f3f4f6" strokeWidth="3" />
-          <circle
-            cx="18"
-            cy="18"
-            r="15.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3"
-            strokeDasharray={`${score} 100`}
-            className={gradeColor}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-lg font-bold tabular-nums ${gradeColor}`}>{score}</span>
-        </div>
-      </div>
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Marketing score</p>
-        <p className="text-sm font-semibold text-gray-900 mt-0.5">Grade {grade}</p>
-        <p className="text-xs text-gray-500 mt-0.5">From onboarding analysis</p>
-      </div>
-    </div>
-  );
-}
-
-function KpiCard({
-  icon,
-  value,
-  label,
-  hint,
-}: {
-  icon: ReactNode;
-  value: number;
-  label: string;
-  hint: string;
-}) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-2 mb-2">{icon}</div>
-      <p className="text-2xl font-bold text-gray-900 tabular-nums">{value}</p>
-      <p className="text-sm font-medium text-gray-800 mt-0.5">{label}</p>
-      <p className="text-[11px] text-gray-500 mt-0.5">{hint}</p>
+    <div>
+      <p className="text-sm text-gray-500 mb-1">{date}</p>
+      <h1 className="text-3xl font-bold text-gray-900">
+        {greeting}, {userName?.split(" ")[0] || "User"}
+      </h1>
     </div>
   );
 }

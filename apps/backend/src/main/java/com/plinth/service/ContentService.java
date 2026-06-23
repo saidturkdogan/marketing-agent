@@ -23,11 +23,44 @@ import org.springframework.web.client.RestClient;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
 
 @Service
 public class ContentService {
 
     private static final Logger log = LoggerFactory.getLogger(ContentService.class);
+    private static final int CONTENT_GENERATION_MAX_ATTEMPTS = 3;
+    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile(
+            "\\[(?:the actual tweet text|comma-separated hashtags|a short title|full linkedin post|seo-optimized|the content)[^\\]]*\\]",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern JSON_BLOCK_PATTERN = Pattern.compile("```(?:json)?\\s*([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
+    private static final List<String> PROMPT_EXAMPLE_MARKERS = List.of(
+            "smarter way to plan campaigns",
+            "biggest marketing bottleneck",
+            "most teams confuse activity with progress",
+            "what actually moved the needle for us",
+            "how to improve campaign roi",
+            "introduction paragraph..."
+    );
+    private static final int MAX_HASHTAG_LENGTH = 25;
+    private static final int MAX_TWEET_HASHTAGS = 3;
+    private static final int MAX_LINKEDIN_HASHTAGS = 5;
+    private static final Set<String> HASHTAG_STOP_WORDS = Set.of(
+            "a", "an", "the", "and", "or", "for", "with", "how", "why", "what", "when", "where",
+            "this", "that", "these", "those", "your", "our", "their", "from", "into", "about",
+            "are", "was", "were", "is", "be", "been", "have", "has", "had", "will", "would",
+            "tweet", "thread", "post", "email", "blog", "content", "update", "news", "tips"
+    );
+    private static final List<String> EMBEDDED_HASHTAG_KEYWORDS = List.of(
+            "pcos", "ovura", "health", "femtech", "wellness", "women", "womenshealth", "tracking",
+            "calendar", "algorithm", "startup", "marketing", "fertility", "hormone", "cycle"
+    );
+    private static final String JSON_OUTPUT_INSTRUCTION = """
+            Respond with ONLY valid JSON (no markdown fences, no commentary) using this schema:
+            {"title":"<short internal label>","body":"<publishable text>","hashtags":["pcos","womenshealth","ovura"]}
+            Hashtag rules: 2-3 short tags only; each tag max 20 characters; 1-2 words; no sentences; no full tweet text; no # prefix.
+            Replace every value with original copy for the requested brand and topic. Do NOT reuse phrasing from these instructions.
+            """;
 
     private final ContentRepository contentRepository;
     private final StrategyRepository strategyRepository;
@@ -111,24 +144,16 @@ public class ContentService {
         Long userId = authUtils.getCurrentUserId();
         CompanyProfile profile = companyService.getProfile(companyId);
 
-        String systemPrompt = buildContentSystemPrompt(type);
-        String userPrompt = buildContentUserPrompt(profile, type, topic, additionalContext);
-
-        String aiResponse = llmService.generate(systemPrompt, userPrompt);
-
-        // Parse AI response
-        String title = extractTitle(aiResponse, topic);
-        String body = extractBody(aiResponse);
-        List<String> hashtags = extractHashtags(aiResponse);
+        ParsedContent parsed = generateParsedContent(profile, type, topic, additionalContext, null, List.of());
 
         ContentEntity entity = new ContentEntity();
         entity.setContentId(UUID.randomUUID().toString());
         entity.setCompanyId(companyId);
         entity.setUserId(userId);
         entity.setType(type);
-        entity.setTitle(title);
-        entity.setBody(body);
-        entity.setHashtags(hashtags);
+        entity.setTitle(parsed.title());
+        entity.setBody(parsed.body());
+        entity.setHashtags(parsed.hashtags());
         entity.setStatus("draft");
 
         contentRepository.save(entity);
@@ -138,19 +163,25 @@ public class ContentService {
     @Transactional
     public ContentEntity generateContentForAgent(String companyId, Long userId, String type,
                                                   String topic, String additionalContext) {
+        return generateContentForAgent(companyId, userId, type, topic, additionalContext, List.of());
+    }
+
+    @Transactional
+    public ContentEntity generateContentForAgent(String companyId, Long userId, String type,
+                                                  String topic, String additionalContext,
+                                                  List<String> distinctFromBodies) {
         CompanyProfile profile = companyService.getProfileInternal(companyId);
-        String systemPrompt = buildContentSystemPrompt(type);
-        String userPrompt = buildContentUserPrompt(profile, type, topic, additionalContext);
-        String aiResponse = llmService.generate(systemPrompt, userPrompt);
+        ParsedContent parsed = generateParsedContent(
+                profile, type, topic, additionalContext, null, distinctFromBodies);
 
         ContentEntity entity = new ContentEntity();
         entity.setContentId(UUID.randomUUID().toString());
         entity.setCompanyId(companyId);
         entity.setUserId(userId);
         entity.setType(type);
-        entity.setTitle(extractTitle(aiResponse, topic));
-        entity.setBody(extractBody(aiResponse));
-        entity.setHashtags(extractHashtags(aiResponse));
+        entity.setTitle(parsed.title());
+        entity.setBody(parsed.body());
+        entity.setHashtags(parsed.hashtags());
         entity.setStatus("draft");
         entity.setApprovalStatus("none");
         contentRepository.save(entity);
@@ -164,17 +195,17 @@ public class ContentService {
                 .orElseThrow(() -> new IllegalArgumentException("Content not found: " + contentId));
 
         CompanyProfile profile = companyService.getProfileInternal(entity.getCompanyId());
-        String systemPrompt = buildContentSystemPrompt(entity.getType());
-        String userPrompt = buildContentUserPrompt(profile, entity.getType(), topic, additionalContext)
-                + "\n\n=== REVISION REQUIRED ===\n"
-                + "Previous draft failed review. Apply these fixes:\n"
-                + revisionFeedback
-                + "\n\nReturn an improved version in the same TITLE/BODY/HASHTAGS format.";
+        ParsedContent parsed = generateParsedContent(
+                profile,
+                entity.getType(),
+                topic,
+                additionalContext,
+                revisionFeedback,
+                List.of());
 
-        String aiResponse = llmService.generate(systemPrompt, userPrompt);
-        entity.setTitle(extractTitle(aiResponse, topic));
-        entity.setBody(extractBody(aiResponse));
-        entity.setHashtags(extractHashtags(aiResponse));
+        entity.setTitle(parsed.title());
+        entity.setBody(parsed.body());
+        entity.setHashtags(parsed.hashtags());
         contentRepository.save(entity);
         return entity;
     }
@@ -583,17 +614,17 @@ public class ContentService {
                     Create engaging, viral-worthy tweets that drive engagement.
                     
                     Rules:
-                    - Maximum 280 characters for the main tweet text
-                    - Use 2-3 relevant hashtags
+                    - Maximum 280 characters for body
+                    - Use 2-3 relevant hashtags (without # prefix)
+                    - Each hashtag must be 1-2 words and under 20 characters (e.g. pcos, womenshealth, ovura)
+                    - Never put the full tweet topic or sentence into a single hashtag
                     - Include a compelling hook in the first line
                     - Use emojis strategically (1-3 max)
                     - Make it shareable and conversation-starting
+                    - Write about the user's brand and topic only
+                    - Never output template placeholders, bracketed instructions, or generic SaaS marketing copy unrelated to the brand
                     
-                    Respond in this exact format:
-                    TITLE: [A short title for internal reference]
-                    BODY: [The actual tweet text, under 280 chars]
-                    HASHTAGS: [comma-separated hashtags without #]
-                    """;
+                    """ + JSON_OUTPUT_INSTRUCTION;
             case "linkedin_post" -> """
                     You are a professional LinkedIn content creator.
                     Create thought leadership posts that drive professional engagement.
@@ -602,32 +633,25 @@ public class ContentService {
                     - Start with a powerful hook (first 2 lines are most important)
                     - Use line breaks for readability
                     - Include a call-to-action at the end
-                    - 3-5 relevant hashtags
+                    - 3-5 relevant hashtags (without # prefix)
                     - 150-300 words ideal length
+                    - Write about the user's brand and topic only
+                    - Never output template placeholders, bracketed instructions, or unrelated generic examples
                     
-                    Respond in this exact format:
-                    TITLE: [A short title for internal reference]
-                    BODY: [The full LinkedIn post]
-                    HASHTAGS: [comma-separated hashtags without #]
-                    """;
+                    """ + JSON_OUTPUT_INSTRUCTION;
             case "blog" -> """
                     You are a professional blog content writer.
                     Create SEO-optimized, engaging blog post outlines with introductions.
+                    Write about the user's brand and topic only.
+                    Never output template placeholders, bracketed instructions, or unrelated generic examples.
                     
-                    Respond in this exact format:
-                    TITLE: [SEO-optimized blog title]
-                    BODY: [Full blog post or detailed outline with intro]
-                    HASHTAGS: [comma-separated topic tags without #]
-                    """;
+                    """ + JSON_OUTPUT_INSTRUCTION;
             default -> """
                     You are a professional content creator.
-                    Create engaging, platform-appropriate content.
+                    Create engaging, platform-appropriate content for the user's brand and topic.
+                    Never output template placeholders, bracketed instructions, or unrelated generic examples.
                     
-                    Respond in this exact format:
-                    TITLE: [A short title]
-                    BODY: [The content]
-                    HASHTAGS: [comma-separated tags without #]
-                    """;
+                    """ + JSON_OUTPUT_INSTRUCTION;
         };
     }
 
@@ -641,9 +665,450 @@ public class ContentService {
         if (additionalContext != null && !additionalContext.isBlank()) {
             sb.append("Additional Context: ").append(additionalContext).append("\n");
         }
+        sb.append("\nCRITICAL REQUIREMENTS:\n");
+        sb.append("- The body must be specifically about the topic: \"").append(topic).append("\"\n");
+        sb.append("- Reflect the company name, industry, audience, and value proposition from BRAND CONTEXT\n");
+        sb.append("- Do NOT output generic startup/SaaS/marketing tweets unless the brand is actually a marketing product\n");
+        sb.append("- Hashtags must match the topic and brand, not generic tags like marketing/startup/growth unless relevant\n");
+        sb.append("- Each hashtag must be short (max 20 chars), 1-2 words, never a full sentence or tweet topic\n");
         sb.append("\nCreate the content now. Make it authentic to the brand voice and target audience described above.");
+        sb.append("\nReturn only JSON with keys title, body, hashtags.");
         return sb.toString();
     }
+
+    private ParsedContent generateParsedContent(CompanyProfile profile, String type, String topic,
+                                                String additionalContext, String revisionFeedback,
+                                                List<String> distinctFromBodies) {
+        String systemPrompt = buildContentSystemPrompt(type);
+        String userPrompt = buildContentUserPrompt(profile, type, topic, additionalContext);
+        if (revisionFeedback != null && !revisionFeedback.isBlank()) {
+            userPrompt += "\n\n=== REVISION REQUIRED ===\n"
+                    + "Previous draft failed review. Apply these fixes:\n"
+                    + revisionFeedback
+                    + "\n\nReturn only improved JSON with keys title, body, hashtags.";
+        }
+
+        String retryHint = "";
+        for (int attempt = 1; attempt <= CONTENT_GENERATION_MAX_ATTEMPTS; attempt++) {
+            String aiResponse = llmService.generate(systemPrompt, userPrompt + retryHint);
+            Optional<ParsedContent> parsed = parseContentResponse(aiResponse, topic, type);
+            if (parsed.isPresent()) {
+                ParsedContent normalized = normalizeParsedContent(parsed.get(), type, profile, topic);
+                if (isValidParsedContent(normalized, type, topic, profile)
+                        && !isTooSimilarToExisting(normalized.body(), distinctFromBodies)) {
+                    return normalized;
+                }
+            }
+
+            log.warn("Content generation attempt {}/{} produced invalid or duplicate output for type={}, topic='{}'",
+                    attempt, CONTENT_GENERATION_MAX_ATTEMPTS, type, topic);
+            retryHint = "\n\nIMPORTANT: Your previous response was rejected because it copied example phrasing, "
+                    + "ignored the topic, duplicated an existing draft, or used invalid hashtags. "
+                    + "Use 2-3 SHORT hashtags (max 20 chars each, e.g. pcos, womenshealth, ovura). "
+                    + "Write original copy specifically about \""
+                    + topic + "\" for " + profile.name() + " with a fresh angle. Output only JSON with real title, body, and hashtags.";
+        }
+
+        log.error("Content generation failed after {} attempts for type={}, topic='{}' — using fallback draft",
+                CONTENT_GENERATION_MAX_ATTEMPTS, type, topic);
+        ParsedContent fallback = buildFallbackContent(profile, type, topic);
+        fallback = normalizeParsedContent(fallback, type, profile, topic);
+        if (isTooSimilarToExisting(fallback.body(), distinctFromBodies)) {
+            fallback = new ParsedContent(
+                    fallback.title(),
+                    truncateTweetBody(fallback.body() + " What would you add?"),
+                    fallback.hashtags());
+        }
+        return fallback;
+    }
+
+    private Optional<ParsedContent> parseContentResponse(String response, String fallbackTitle, String type) {
+        if (response == null || response.isBlank()) {
+            return Optional.empty();
+        }
+
+        Optional<ParsedContent> jsonParsed = parseJsonContentResponse(response, fallbackTitle);
+        if (jsonParsed.isPresent()) {
+            return jsonParsed;
+        }
+
+        String title = extractTitle(response, fallbackTitle);
+        String body = extractBody(response);
+        List<String> hashtags = extractHashtags(response);
+        if (body.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(new ParsedContent(title, body, hashtags));
+    }
+
+    private Optional<ParsedContent> parseJsonContentResponse(String response, String fallbackTitle) {
+        for (String candidate : extractJsonCandidates(response)) {
+            try {
+                JsonNode root = objectMapper.readTree(candidate);
+                String title = root.path("title").asText("").trim();
+                String body = root.path("body").asText("").trim();
+                List<String> hashtags = new ArrayList<>();
+
+                JsonNode tagsNode = root.path("hashtags");
+                if (tagsNode.isArray()) {
+                    for (JsonNode tag : tagsNode) {
+                        String value = tag.asText("").trim();
+                        if (!value.isBlank()) {
+                            hashtags.add(value.startsWith("#") ? value.substring(1) : value);
+                        }
+                    }
+                } else if (tagsNode.isTextual()) {
+                    hashtags = Arrays.stream(tagsNode.asText("").split(","))
+                            .map(String::trim)
+                            .filter(s -> !s.isBlank())
+                            .map(s -> s.startsWith("#") ? s.substring(1) : s)
+                            .toList();
+                }
+
+                if (title.isBlank()) {
+                    title = fallbackTitle;
+                }
+                if (body.isBlank()) {
+                    continue;
+                }
+                ParsedContent parsed = new ParsedContent(title, body, hashtags);
+                return Optional.of(parsed);
+            } catch (Exception ex) {
+                log.debug("Failed to parse content JSON candidate: {}", ex.getMessage());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private List<String> extractJsonCandidates(String response) {
+        List<String> candidates = new ArrayList<>();
+        var matcher = JSON_BLOCK_PATTERN.matcher(response);
+        while (matcher.find()) {
+            candidates.add(matcher.group(1).trim());
+        }
+
+        String trimmed = response.trim();
+        candidates.add(trimmed);
+
+        int start = trimmed.indexOf('{');
+        int end = trimmed.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            candidates.add(trimmed.substring(start, end + 1));
+        }
+        return candidates;
+    }
+
+    private boolean isTooSimilarToExisting(String body, List<String> existingBodies) {
+        if (body == null || body.isBlank() || existingBodies == null || existingBodies.isEmpty()) {
+            return false;
+        }
+        String normalized = normalizeComparableText(body);
+        for (String existing : existingBodies) {
+            if (existing == null || existing.isBlank()) {
+                continue;
+            }
+            String other = normalizeComparableText(existing);
+            if (normalized.equals(other)) {
+                return true;
+            }
+            if (normalized.length() > 30 && other.length() > 30
+                    && (normalized.contains(other) || other.contains(normalized))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalizeComparableText(String value) {
+        return value.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9\\s]+", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private boolean isValidParsedContent(ParsedContent content, String type, String topic, CompanyProfile profile) {
+        if (content.body() == null || content.body().isBlank()) {
+            return false;
+        }
+        if (looksLikePlaceholder(content.title()) || looksLikePlaceholder(content.body())) {
+            return false;
+        }
+        if (content.hashtags().stream().anyMatch(this::looksLikePlaceholder)) {
+            return false;
+        }
+        if (content.hashtags().stream().anyMatch(tag -> !isValidHashtagToken(tag))) {
+            return false;
+        }
+        if (looksLikePromptExample(content)) {
+            return false;
+        }
+        if (!reflectsTopicOrBrand(content, topic, profile)) {
+            return false;
+        }
+        if ("tweet".equalsIgnoreCase(type) && content.body().length() > 280) {
+            return false;
+        }
+        return true;
+    }
+
+    private boolean looksLikePromptExample(ParsedContent content) {
+        String combined = (content.title() + " " + content.body() + " "
+                + String.join(" ", content.hashtags())).toLowerCase(Locale.ROOT);
+        for (String marker : PROMPT_EXAMPLE_MARKERS) {
+            if (combined.contains(marker)) {
+                return true;
+            }
+        }
+        List<String> tags = content.hashtags().stream()
+                .map(tag -> tag.toLowerCase(Locale.ROOT))
+                .sorted()
+                .toList();
+        return tags.equals(List.of("growth", "marketing", "startup"))
+                && combined.contains("plan campaigns");
+    }
+
+    private boolean reflectsTopicOrBrand(ParsedContent content, String topic, CompanyProfile profile) {
+        String haystack = (content.title() + " " + content.body() + " "
+                + String.join(" ", content.hashtags())).toLowerCase(Locale.ROOT);
+
+        if (profile.name() != null && !profile.name().isBlank()) {
+            String companyToken = profile.name().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim();
+            for (String token : companyToken.split("\\s+")) {
+                if (token.length() >= 3 && haystack.contains(token)) {
+                    return true;
+                }
+            }
+        }
+
+        if (profile.productName() != null && !profile.productName().isBlank()) {
+            String productToken = profile.productName().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim();
+            for (String token : productToken.split("\\s+")) {
+                if (token.length() >= 3 && haystack.contains(token)) {
+                    return true;
+                }
+            }
+        }
+
+        if (topic == null || topic.isBlank()) {
+            return true;
+        }
+
+        for (String token : topic.toLowerCase(Locale.ROOT).split("[^a-z0-9]+")) {
+            if (token.length() >= 3 && haystack.contains(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean looksLikePlaceholder(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String normalized = value.trim();
+        if (PLACEHOLDER_PATTERN.matcher(normalized).find()) {
+            return true;
+        }
+        if (normalized.startsWith("[") && normalized.endsWith("]")) {
+            return true;
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        return lower.contains("internal reference")
+                || lower.contains("comma-separated hashtags")
+                || lower.contains("the actual tweet text");
+    }
+
+    private ParsedContent buildFallbackContent(CompanyProfile profile, String type, String topic) {
+        String company = profile.name() != null && !profile.name().isBlank() ? profile.name() : "our brand";
+        String safeTopic = topic != null && !topic.isBlank() ? topic : "our latest update";
+
+        if ("tweet".equalsIgnoreCase(type)) {
+            String body = truncateTweetBody(String.format(
+                    "%s — sharing thoughts on %s. What would you add?",
+                    company,
+                    safeTopic));
+            List<String> hashtags = buildFallbackHashtags(company, safeTopic);
+            return new ParsedContent(safeTopic, body, hashtags);
+        }
+
+        String body = String.format("%s is exploring %s. More details coming soon.", company, safeTopic);
+        return new ParsedContent(safeTopic, body, buildFallbackHashtags(company, safeTopic));
+    }
+
+    private ParsedContent normalizeParsedContent(ParsedContent parsed, String type,
+                                                 CompanyProfile profile, String topic) {
+        List<String> tags = normalizeHashtags(parsed.hashtags(), type, profile, topic);
+        return new ParsedContent(parsed.title(), parsed.body(), tags);
+    }
+
+    private List<String> normalizeHashtags(List<String> raw, String type,
+                                           CompanyProfile profile, String topic) {
+        int maxTags = maxHashtagsForType(type);
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+
+        if (raw != null) {
+            for (String tag : raw) {
+                if (result.size() >= maxTags) {
+                    break;
+                }
+                for (String candidate : expandHashtagCandidates(tag)) {
+                    if (result.size() >= maxTags) {
+                        break;
+                    }
+                    if (isValidHashtagToken(candidate)) {
+                        result.add(normalizeHashtagToken(candidate));
+                    }
+                }
+            }
+        }
+
+        if (result.size() < 2) {
+            addHashtagKeywords(result, profile.name(), maxTags);
+            addHashtagKeywords(result, profile.productName(), maxTags);
+            addHashtagKeywords(result, topic, maxTags);
+            addHashtagKeywords(result, profile.industry(), maxTags);
+            if (profile.productsOrServices() != null) {
+                for (String product : profile.productsOrServices()) {
+                    addHashtagKeywords(result, product, maxTags);
+                    if (result.size() >= maxTags) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (result.isEmpty()) {
+            result.add("update");
+        }
+        return result.stream().limit(maxTags).toList();
+    }
+
+    private int maxHashtagsForType(String type) {
+        return "linkedin_post".equalsIgnoreCase(type) ? MAX_LINKEDIN_HASHTAGS : MAX_TWEET_HASHTAGS;
+    }
+
+    private List<String> expandHashtagCandidates(String tag) {
+        if (tag == null || tag.isBlank()) {
+            return List.of();
+        }
+
+        String cleaned = tag.trim().replaceFirst("^#+", "");
+        if (cleaned.isBlank()) {
+            return List.of();
+        }
+
+        if (cleaned.contains(" ") || cleaned.contains(",") || cleaned.contains(";")
+                || cleaned.contains("|") || cleaned.contains("_")) {
+            return Arrays.stream(cleaned.split("[\\s,;|_]+"))
+                    .map(this::normalizeHashtagToken)
+                    .filter(token -> !token.isBlank())
+                    .toList();
+        }
+
+        if (cleaned.matches(".*[a-z][A-Z].*")) {
+            return Arrays.stream(cleaned.split("(?=[A-Z])"))
+                    .map(this::normalizeHashtagToken)
+                    .filter(token -> !token.isBlank())
+                    .toList();
+        }
+
+        if (cleaned.length() > MAX_HASHTAG_LENGTH) {
+            List<String> embedded = extractEmbeddedKeywords(cleaned);
+            if (!embedded.isEmpty()) {
+                return embedded;
+            }
+            return extractKeywordTokens(cleaned);
+        }
+
+        return List.of(normalizeHashtagToken(cleaned));
+    }
+
+    private List<String> extractEmbeddedKeywords(String blob) {
+        String lower = blob.toLowerCase(Locale.ROOT);
+        List<String> found = new ArrayList<>();
+        for (String keyword : EMBEDDED_HASHTAG_KEYWORDS) {
+            if (lower.contains(keyword)) {
+                found.add(keyword);
+            }
+        }
+        return found;
+    }
+
+    private void addHashtagKeywords(Set<String> tags, String text, int maxTags) {
+        if (text == null || text.isBlank() || tags.size() >= maxTags) {
+            return;
+        }
+        for (String token : extractKeywordTokens(text)) {
+            if (tags.size() >= maxTags) {
+                break;
+            }
+            if (isValidHashtagToken(token)) {
+                tags.add(normalizeHashtagToken(token));
+            }
+        }
+    }
+
+    private List<String> extractKeywordTokens(String text) {
+        if (text == null || text.isBlank()) {
+            return List.of();
+        }
+
+        LinkedHashSet<String> tokens = new LinkedHashSet<>();
+        for (String part : text.split("[^a-zA-Z0-9]+")) {
+            String token = normalizeHashtagToken(part);
+            if (isValidHashtagToken(token)) {
+                tokens.add(token);
+            }
+        }
+
+        if (tokens.isEmpty() && text.length() > MAX_HASHTAG_LENGTH) {
+            tokens.addAll(extractEmbeddedKeywords(text));
+        }
+        return new ArrayList<>(tokens);
+    }
+
+    private String normalizeHashtagToken(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw.toLowerCase(Locale.ROOT)
+                .replaceAll("^#+", "")
+                .replaceAll("[^a-z0-9]+", "")
+                .trim();
+    }
+
+    private boolean isValidHashtagToken(String token) {
+        if (token == null || token.isBlank()) {
+            return false;
+        }
+        String normalized = normalizeHashtagToken(token);
+        if (normalized.length() < 3 || normalized.length() > MAX_HASHTAG_LENGTH) {
+            return false;
+        }
+        if (HASHTAG_STOP_WORDS.contains(normalized)) {
+            return false;
+        }
+        return normalized.chars().anyMatch(Character::isLetter);
+    }
+
+    private List<String> buildFallbackHashtags(String company, String topic) {
+        LinkedHashSet<String> tags = new LinkedHashSet<>();
+        addHashtagKeywords(tags, company, MAX_TWEET_HASHTAGS);
+        addHashtagKeywords(tags, topic, MAX_TWEET_HASHTAGS);
+        if (tags.isEmpty()) {
+            tags.add("update");
+        }
+        return tags.stream().limit(MAX_TWEET_HASHTAGS).toList();
+    }
+
+    private String truncateTweetBody(String body) {
+        if (body.length() <= 280) {
+            return body;
+        }
+        return body.substring(0, 277).trim() + "...";
+    }
+
+    private record ParsedContent(String title, String body, List<String> hashtags) {}
 
     // ── Response Parsing ─────────────────────────────────────────
 

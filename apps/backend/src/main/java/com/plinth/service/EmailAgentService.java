@@ -161,10 +161,12 @@ public class EmailAgentService {
         }
 
         String senderName = extractSenderName(message.getFrom());
+        String incomingBody = GmailFetchService.toPlainEmailText(
+                message.getBody() != null ? message.getBody() : message.getSnippet());
         String draft = gmailFetchService.draftReply(
                 companyId,
                 message.getSubject(),
-                message.getBody() != null ? message.getBody() : message.getSnippet(),
+                incomingBody,
                 senderName
         );
         agentBudgetService.recordLlmCall(companyId);
@@ -199,8 +201,9 @@ public class EmailAgentService {
     }
 
     private EmailClassification classifyEmail(CompanyProfile profile, GmailMessageEntity message) {
-        String body = message.getBody() != null ? message.getBody() : message.getSnippet();
-        if (body != null && body.length() > 1200) {
+        String body = GmailFetchService.toPlainEmailText(
+                message.getBody() != null ? message.getBody() : message.getSnippet());
+        if (body.length() > 1200) {
             body = body.substring(0, 1200) + "...";
         }
 

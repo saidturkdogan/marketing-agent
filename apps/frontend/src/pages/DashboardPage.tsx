@@ -125,13 +125,15 @@ const NAV_ITEMS: { id: View; label: string; icon: typeof Home }[] = [
 ];
 
 const THEMES = [
+  { id: "theme-light", label: "Light", icon: Sun },
+  { id: "theme-light-gray", label: "Light Gray", icon: Palette },
+  { id: "theme-gray", label: "Gray", icon: Monitor },
+  { id: "theme-space-gray", label: "Space Gray", icon: Moon },
   { id: "theme-black", label: "Black", icon: Moon },
-  { id: "theme-space-gray", label: "Space Gray", icon: Monitor },
-  { id: "theme-gray", label: "Gray", icon: Palette },
-  { id: "theme-light-gray", label: "Light Gray", icon: Sun },
 ] as const;
 
 const THEME_STORAGE_KEY = "plinth-theme";
+const DEFAULT_THEME = "theme-light";
 
 export function DashboardPage() {
   const { companyId, tab: tabParam } = useParams<{ companyId: string; tab?: string }>();
@@ -207,7 +209,11 @@ export function DashboardPage() {
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const [currentTheme, setCurrentTheme] = useState(() => {
-    return localStorage.getItem(THEME_STORAGE_KEY) || "theme-black";
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    if (!stored || stored === "theme-black") {
+      return DEFAULT_THEME;
+    }
+    return stored;
   });
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const themePickerRef = useRef<HTMLDivElement>(null);
@@ -569,7 +575,6 @@ export function DashboardPage() {
     );
   }
 
-  const score = dashboardData?.marketingScore ?? 0;
   const overviewLoading = loading && !dashboardData;
 
   const scheduledPosts = allContents
@@ -967,8 +972,6 @@ export function DashboardPage() {
             <OverviewView
               companyId={companyId}
               company={company}
-              dashboardData={dashboardData}
-              marketingScore={score}
               strategy={strategy}
               calendar={{
                 days: calendarDays,
@@ -1051,7 +1054,7 @@ export function DashboardPage() {
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Connected Accounts</h3>
 
                 {/* Gmail */}
-                <Card className="border-gray-200">
+                <Card className="border-gray-200 bg-white text-gray-900 shadow-sm">
                   <CardContent className="p-5 flex items-center gap-4">
                     <Mail className="h-8 w-8 text-gray-400" />
                     <div className="flex-1 min-w-0">
@@ -1067,7 +1070,7 @@ export function DashboardPage() {
                 </Card>
 
                 {/* Google Calendar */}
-                <Card className="border-gray-200">
+                <Card className="border-gray-200 bg-white text-gray-900 shadow-sm">
                   <CardContent className="p-5 flex items-center gap-4">
                     <Calendar className="h-8 w-8 text-gray-400" />
                     <div className="flex-1 min-w-0">
@@ -1083,7 +1086,7 @@ export function DashboardPage() {
                 </Card>
 
                 {/* Twitter */}
-                <Card className="border-gray-200">
+                <Card className="border-gray-200 bg-white text-gray-900 shadow-sm">
                   <CardContent className="p-5 flex items-center gap-4">
                     <Twitter className="h-8 w-8 text-gray-400" />
                     <div className="flex-1 min-w-0">
@@ -1254,11 +1257,6 @@ function DashboardOverviewSkeleton() {
         <div className="h-4 w-32 rounded bg-gray-100" />
         <div className="h-9 w-72 rounded bg-gray-100" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-28 rounded-xl bg-gray-100" />
-        ))}
-      </div>
       <div className="h-32 rounded-xl bg-gray-100" />
       <div className="h-40 rounded-xl bg-gray-100" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1273,8 +1271,6 @@ function DashboardOverviewSkeleton() {
 function OverviewView({
   companyId,
   company,
-  dashboardData,
-  marketingScore,
   strategy,
   calendar,
   weekDays,
@@ -1318,8 +1314,6 @@ function OverviewView({
 }: {
   companyId?: string;
   company: Company | null;
-  dashboardData: DashboardData | null;
-  marketingScore: number;
   strategy: Record<string, unknown>;
   calendar: {
     days: Record<string, unknown>[];
@@ -1381,8 +1375,6 @@ function OverviewView({
         date={date}
         greeting={greeting}
         userName={userName}
-        marketingScore={marketingScore}
-        dashboardData={dashboardData}
       />
 
       <NeedsAttentionSection
